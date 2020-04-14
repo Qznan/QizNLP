@@ -244,7 +244,6 @@ def preprocess_raw_data(file, tokenize, token2id_dct, **kwargs):
 
 
 def preprocess_common_dataset_XiaoHJ(file, tokenize, token2id_dct, **kwargs):
-    file = '../data/XHJ_5w.txt'
 
     def change2items(file):
         lines = utils.file2list(file)
@@ -267,7 +266,7 @@ def preprocess_common_dataset_XiaoHJ(file, tokenize, token2id_dct, **kwargs):
 
     # 转为[src, tgt]格式 且按字分
     # XiaoHJ数据不分词,直接按字分,但为了方便词典仍旧叫word2id
-    items = change2items(file)
+    items = change2items('../data/XHJ_5w.txt')
 
     # 划分 不分测试集
     train_items, dev_items = utils.split_file(items, ratio='19:1', shuffle=True, seed=1234)
@@ -300,8 +299,8 @@ if __name__ == '__main__':
     
     # demo训练小黄鸡
     rm_s2s = Run_Model_S2S('trans')
-    rm_s2s.train('s2s_ckpt_XHJ', '', preprocess_raw_data=preprocess_common_dataset_XiaoHJ, batch_size=512)  # train
-    rm_s2s.restore('s2s_ckpt_XHJ')  # infer
+    rm_s2s.train('s2s_ckpt_XHJ1', '', preprocess_raw_data=preprocess_common_dataset_XiaoHJ, batch_size=512)  # train
+    rm_s2s.restore('s2s_ckpt_XHJ1')  # infer
     import readline
 
     while True:
