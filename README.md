@@ -99,14 +99,16 @@ python run_mch.py
 # 运行生成任务
 python run_s2s.py
 ```
-各任务默认数据说明
+各任务默认数据及模型说明
 
-|任务|训练代码|调用的模型代码|默认模型|默认数据|备注|来源| 
-|---|---|---|---|---|---|---|
-|分类|run_cls.py|model_cls.py|TransEncoder+MHAtt_Pooling|train、valid、test.toutiao.cls.txt|头条新闻分类|https://github.com/luopeixiang/textclf|
-|序列标注|run_s2l.py|model_s2l.py|BiLSTM+CRF|train、dev、test.char.bmes.txt|ResumeNER简历数据|https://github.com/jiesutd/LatticeLSTM|
-|匹配|run_mch.py|model_mch.py|ESIM|mch_example_data.txt|ChineseSTS相似文本语义|https://github.com/IAdmireu/ChineseSTS|
-|生成|run_s2s.py|model_s2s.py|Transformer|XHJ_5w.txt|小黄鸡闲聊5万|https://github.com/candlewill/Dialog_Corpus|
+|任务|训练代码|模型代码|支持模型<br>*(默认)|默认数据|备注|来源| 
+|:---:|:---:|:---:|:---|---|:---|---|
+|分类|run_cls.py|model_cls.py|TransEncoder+MeanPooling<br>*TransEncoder+MHAttPooling|train、valid、test.toutiao.cls.txt|头条新闻分类|https://github.com/luopeixiang/textclf|
+|序列标注|run_s2l.py|model_s2l.py|*BiLSTM+CRF<br>IDCNN+CRF|train、dev、test.char.bmes.txt|ResumeNER简历数据|https://github.com/jiesutd/LatticeLSTM|
+|匹配|run_mch.py|model_mch.py|*ESIM|mch_example_data.txt|ChineseSTS相似文本语义|https://github.com/IAdmireu/ChineseSTS|
+|生成|run_s2s.py|model_s2s.py|Seq2Seq+Attn<br>*Transformer|XHJ_5w.txt|小黄鸡闲聊5万|https://github.com/candlewill/Dialog_Corpus|
+|附-其它衍生任务|
+|多轮生成|run_multi_s2s.py|multi_s2s_model.py|HRED<br>HRAN<br>*ReCoSa|XHJ_5w.txt<br>+Douban_Sess662.txt|小黄鸡闲聊5万<br>豆瓣多轮会话600+|https://github.com/candlewill/Dialog_Corpus<br>https://github.com/MarkWuNLP/MultiTurnResponseSelection
 #### 2.使用自有数据
 根据输入数据文本格式修改```run_*.py```中的```preprocess_raw_data()```函数，决定如何读取自有数据。
 目前除```run_s2l.py```中，均已有```preprocess_raw_data()```的函数参考示例，其中默认文本格式如下：
