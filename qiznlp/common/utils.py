@@ -529,10 +529,10 @@ class Any2Id():
 
 
 def pad_sequences(sequences, maxlen=None, dtype='int32', padding='pre', truncating='pre', value=0.):
-    assert hasattr(sequences, 'len')
+    assert hasattr(sequences, '__len__')
     len_lst = []
     for x in sequences:
-        assert hasattr(x, 'len')
+        assert hasattr(x, '__len__')
         len_lst.append(len(x))
 
     num_samples = len(sequences)
