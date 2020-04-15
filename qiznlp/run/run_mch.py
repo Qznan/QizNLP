@@ -170,6 +170,7 @@ class Run_Model_Mch(Run_Model_Base):
                 loss = np.mean(epo_loss)
                 acc = np.mean(epo_acc)
                 recall = train_helper.calc_recall(epo_s1, epo_prob, epo_y, strip_pad=True)  # calc recall
+                recall = list(map(lambda e: round(e, 3), recall))
 
                 print(f'epo:{epo} {mode} loss {loss:.3f} '
                       f'{mode} acc {acc:.3f} '
@@ -177,12 +178,14 @@ class Run_Model_Mch(Run_Model_Base):
                       f'elapsed {(time.time() - time0) / 60:.2f} min')
                 train_info[epo][f'{mode}_loss'] = loss
                 train_info[epo][f'{mode}_acc'] = acc
+                train_info[epo][f'{mode}_recall@n'] = recall
 
-            info_str = f'{trn_loss:.2f}-{train_info["dev_loss"]:.2f}-{train_info["test_loss"]:.2f}'
-            info_str += f'-{trn_acc:.3f}-{train_info["dev_acc"]:.3f}-{train_info["test_acc"]:.3f}'
+            info_str = f'{trn_loss:.2f}-{train_info[epo]["dev_loss"]:.2f}'
+            info_str += f'-{trn_acc:.3f}-{train_info[epo]["dev_acc"]:.3f}'
+            info_str += f'-{train_info[epo]["dev_recall@n"][0]:.3f}'
 
             if conf.just_save_best:
-                if self.should_save(epo, train_info, 'dev_acc', greater_is_better=True):
+                if self.should_save(epo, train_info, 'dev_recall@n', greater_is_better=True):
                     self.delete_ckpt(ckpt_dir=ckpt_dir)  # 删掉已存在的
                     self.save(ckpt_dir=ckpt_dir, epo=epo, info_str=info_str)
             else:

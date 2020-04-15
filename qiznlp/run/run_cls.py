@@ -173,8 +173,9 @@ class Run_Model_Cls(Run_Model_Base):
                 train_info[epo][f'{mode}_loss'] = loss
                 train_info[epo][f'{mode}_acc'] = acc
 
-            info_str = f'{trn_loss:.2f}-{trn_acc:.2f}'
-            # info_str = f'{trn_loss:.2f}-{dev_loss:.2f}-{test_loss:.2f}-{trn_acc:.3f}-{dev_acc:.3f}-{test_acc:.3f}'
+            info_str = f'{trn_loss:.2f}-{trn_acc:.3f}'
+            # info_str += f'-{train_info[epo]["dev_loss"]:.2f}-{train_info[epo]["dev_acc"]:.3f}'
+            # info_str += f'-{train_info[epo]["test_loss"]:.2f}-{train_info[epo]["test_acc"]:.3f}'
 
             if conf.just_save_best:
                 if self.should_save(epo, train_info, 'dev_acc', greater_is_better=True):

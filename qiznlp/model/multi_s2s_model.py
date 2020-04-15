@@ -758,8 +758,7 @@ class Model(object):
 
         model = cls(build_graph=False)  # 里面不再构造图
         # 绑定必要的输入输出到实例
-        model.s1 = graph.get_tensor_by_name('multi_s1:0')
-        # model.s2 = graph.get_tensor_by_name('s2:0')
+        model.multi_s1 = graph.get_tensor_by_name('multi_s1:0')
         model.dropout_rate = graph.get_tensor_by_name('dropout_rate:0')
         model.decoded_ids = graph.get_tensor_by_name('decoded_ids:0')
         model.scores = graph.get_tensor_by_name('scores:0')

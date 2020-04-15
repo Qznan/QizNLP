@@ -280,7 +280,7 @@ def preprocess_common_dataset_XiaoHJ_and_Douban(file, tokenize, token2id_dct, **
     # 转为[src, tgt]格式 且按字分
     # XiaoHJ和Douban数据不分词,直接按字分,但为了方便词典仍旧叫word2id
     items = Doubanchange2items('../data/Douban_Sess662.txt')
-    items += XiaoHJchange2items('../data/XHJ_5w.txt')
+    items += XiaoHJchange2items('../data/XHJ_5w.txt')  # [['w w w$$$w w', 'w w w'],...]
 
     # 划分 不分测试集
     train_items, dev_items = utils.split_file(items, ratio='19:1', shuffle=True, seed=1234)
@@ -297,8 +297,9 @@ def preprocess_common_dataset_XiaoHJ_and_Douban(file, tokenize, token2id_dct, **
         for items in [train_items, dev_items]:  # 字典只统计train和dev
             for item in items:
                 if 'word2id' in need_to_rebuild:
-                    token2id_dct['word2id'].to_count(item[0].split(' '))  # 按字分
-                    token2id_dct['word2id'].to_count(item[1].split(' '))  # 按字分
+                    for sent in item[0].split('$$$'):
+                        token2id_dct['word2id'].to_count(sent.split(' '))
+                    token2id_dct['word2id'].to_count(item[1].split(' '))
         if 'word2id' in need_to_rebuild:
             token2id_dct['word2id'].rebuild_by_counter(restrict=['<pad>', '<unk>', '<eos>'], min_freq=1, max_vocab_size=4000)
             token2id_dct['word2id'].save(f'{curr_dir}/../data/XHJDBchar2id.dct')
