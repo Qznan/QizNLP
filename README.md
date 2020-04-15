@@ -1,8 +1,8 @@
-![](https://img.shields.io/pypi/v/QizNLP?logo=pypi)
+[![](https://img.shields.io/pypi/v/QizNLP?logo=pypi)](https://pypi.org/project/QizNLP/)
 ![](https://img.shields.io/pypi/pyversions/QizNLP?logo=pypi) 
-![](https://img.shields.io/pypi/l/QizNLP?logo=pypi)
+![](https://img.shields.io/pypi/l/QizNLP?color=green&logo=pypi)
 
-**目录：**
+**目录**
 * [QizNLP简介](#QizNLP简介)
 * [安装流程](#安装流程)
 * [使用示例](#使用示例)
@@ -102,7 +102,7 @@ python run_s2s.py
 各任务默认数据及模型说明
 
 |任务|训练代码|模型代码|支持模型<br>*(默认)|默认数据|备注|来源| 
-|:---:|:---:|:---:|:---|---|:---|---|
+|:------:|:---:|:---:|:---|---|:---|---|
 |分类|run_cls.py|model_cls.py|TransEncoder+MeanPooling<br>*TransEncoder+MHAttPooling|train、valid、test.toutiao.cls.txt|头条新闻分类|https://github.com/luopeixiang/textclf|
 |序列标注|run_s2l.py|model_s2l.py|*BiLSTM+CRF<br>IDCNN+CRF|train、dev、test.char.bmes.txt|ResumeNER简历数据|https://github.com/jiesutd/LatticeLSTM|
 |匹配|run_mch.py|model_mch.py|*ESIM|mch_example_data.txt|ChineseSTS相似文本语义|https://github.com/IAdmireu/ChineseSTS|
