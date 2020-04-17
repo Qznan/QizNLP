@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 # coding=utf-8
+import tensorflow as tf
+from tensorflow.python.util import nest
 from .beam_search import *
 from .embedding import *
+from .common_layers import *
 
 
 def transformer_encoder(encoder_input, encoder_valid_mask,
@@ -673,3 +676,72 @@ class EncDecAttention():
         context = tf.expand_dims(alignments, axis=-1) * self.memory  # [batch,length,memory_size]
         context = tf.reduce_sum(context, axis=1)  # [batch,memory_size]
         return context  # [batch,memory_size]
+
+
+def multihead_attention_encoder(query, key, key_valid_mask,
+                                hidden_size, num_heads, dropout_rate,
+                                name='multihead_attention', reuse=tf.AUTO_REUSE,
+                                dropout_broadcast_dims=None):
+    with tf.variable_scope(name, reuse=reuse):
+        key_pad_mask = 1. - key_valid_mask  # 1 for pad 0 for nonpad 用于ffn  [batch,len]
+        key_attention_bias = key_pad_mask * -1e9  # attention mask
+        key_attention_bias = tf.expand_dims(tf.expand_dims(key_attention_bias, axis=1), axis=1)  # [batch,1,1,len]
+        # key_attention_bias [batch,1,1,len_k] + [batch,head,len_q,len_k]
+        output = multihead_attention(
+            query,
+            key,
+            key_attention_bias,
+            hidden_size,
+            hidden_size,
+            hidden_size,
+            num_heads,
+            dropout_rate,
+        )
+        output += query
+
+        output = layer_norm(output)
+
+        output = dropout_with_broadcast_dims(output, 1.0 - dropout_rate, broadcast_dims=dropout_broadcast_dims)
+
+    return output
+
+
+def conv_multi_kernel(inputs, filters, kernels_size=(1, 2, 3, 4), strides=1, padding='SAME',
+                      name='conv_multi_kernel', reuse=tf.AUTO_REUSE,
+                      activation=None, use_bias=False,
+                      layer_norm_finally=True,
+                      ):
+    # mrfn function
+    # inputs [batch,len,hid]
+    with tf.variable_scope(name, reuse=reuse):
+        output_lst = []
+        for i, kernel_size in enumerate(kernels_size):
+            output = tf.layers.conv1d(inputs, filters, kernel_size, strides=strides, padding=padding,
+                                      activation=activation, use_bias=use_bias, name='conv1d_%d' % i)
+            output_lst.append(output)
+        output = tf.concat(output_lst, -1)  # [batch,len,filter*len(kernel)
+        if layer_norm_finally:
+            output = layer_norm(output)
+        return output
+
+
+def batch_coattention_nnsubmulti(utterance, response, utterance_mask, scope="co_attention", reuse=None):
+    # mrfn function
+    with tf.variable_scope(scope, reuse=reuse):
+        dim = utterance.get_shape().as_list()[-1]
+        weight = tf.get_variable('Weight', shape=[dim, dim], dtype=tf.float32)
+        e_utterance = tf.einsum('aij,jk->aik', utterance, weight)
+        a_matrix = tf.matmul(response, tf.transpose(e_utterance, perm=[0, 2, 1]))
+        reponse_atten = tf.matmul(masked_softmax(a_matrix, utterance_mask), utterance)
+        feature_mul = tf.multiply(reponse_atten, response)
+        feature_sub = tf.subtract(reponse_atten, response)
+        feature_last = tf.layers.dense(tf.concat([feature_mul, feature_sub], axis=-1), dim, use_bias=True, activation=tf.nn.relu, reuse=reuse)
+    return feature_last
+
+
+def masked_softmax(scores, mask):
+    # mrfn function
+    numerator = tf.exp(scores - tf.reduce_max(scores, 2, keepdims=True)) * tf.expand_dims(mask, axis=1)
+    denominator = tf.reduce_sum(numerator, 2, keepdims=True)
+    weights = tf.div(numerator + 1e-5 / tf.cast(tf.shape(mask)[-1], tf.float32), denominator + 1e-5)
+    return weights
