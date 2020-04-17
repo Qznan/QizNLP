@@ -59,12 +59,16 @@ qiznlp_init
 │   ├── cls_model.py
 │   ├── mch_model.py
 │   ├── s2l_model.py
-│   └── s2s_model.py
+│   ├── s2s_model.py
+│   ├── multi_mch_model.py
+│   └── multi_s2s_model.py
 ├── run		# 各个任务的模型训练代码示例
 │   ├── run_cls.py
 │   ├── run_mch.py
 │   ├── run_s2l.py
 │   ├── run_s2s.py
+│   ├── run_multi_mch.py
+│   └── run_multi_s2s.py
 ├── deploy	# 模型载入及部署的代码示例
 │   ├── example.py
 │   └── web_API.py
@@ -76,11 +80,12 @@ qiznlp_init
     ├── dev.char.bmes.txt
     ├── test.char.bmes.txt
     ├── mch_example_data.txt
-    └── XHJ_5w.txt
+    ├── XHJ_5w.txt
+    └── Douban_Sess662.txt
 ```
 注意：如果不是通过pip安装此项目而是直接从github上克隆项目源码，则进行后续操作前需将包显式加入python路径中：
 ```
-export PYTHONPATH=$PYTHONPATH:克隆的qiznlp所在目录
+export PYTHONPATH=$PYTHONPATH:<克隆的qiznlp所在目录dir>
 ```
 ## 使用示例
 #### 1.快速运行（使用默认数据训练）
@@ -98,6 +103,13 @@ python run_mch.py
 
 # 运行生成任务
 python run_s2s.py
+
+# 运行多轮匹配任务
+python run_multi_mch.py
+
+# 运行多轮生成任务
+python run_multi_s2s.py
+
 ```
 各任务默认数据及模型说明
 
@@ -107,8 +119,10 @@ python run_s2s.py
 |序列标注|run_s2l.py|model_s2l.py|*BiLSTM+CRF<br>IDCNN+CRF|train、dev、test.char.bmes.txt|ResumeNER简历数据|https://github.com/jiesutd/LatticeLSTM|
 |匹配|run_mch.py|model_mch.py|*ESIM|mch_example_data.txt|ChineseSTS相似文本语义|https://github.com/IAdmireu/ChineseSTS|
 |生成|run_s2s.py|model_s2s.py|Seq2Seq+Attn<br>*Transformer|XHJ_5w.txt|小黄鸡闲聊5万|https://github.com/candlewill/Dialog_Corpus|
-|附-其它衍生任务|
+|<img width=150/>|
+|多轮匹配|run_multi_mch.py|multi_mch_model.py|DAM<br>*MRFN|Douban_Sess662.txt|豆瓣多轮会话600+|https://github.com/MarkWuNLP/MultiTurnResponseSelection
 |多轮生成|run_multi_s2s.py|multi_s2s_model.py|HRED<br>HRAN<br>*ReCoSa|XHJ_5w.txt<br>+Douban_Sess662.txt|小黄鸡闲聊5万<br>豆瓣多轮会话600+|https://github.com/candlewill/Dialog_Corpus<br>https://github.com/MarkWuNLP/MultiTurnResponseSelection
+
 #### 2.使用自有数据
 根据输入数据文本格式修改```run_*.py```中的```preprocess_raw_data()```函数，决定如何读取自有数据。
 目前除```run_s2l.py```中，均已有```preprocess_raw_data()```的函数参考示例，其中默认文本格式如下：
