@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='QizNLP',
-    version='0.1.1',
+    version='0.1.2',
     author='Qznan',
     author_email='summerzynqz@gmail.com',
     description='Quick run NLP in many task',
