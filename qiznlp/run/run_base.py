@@ -84,12 +84,12 @@ class Run_Model_Base():
                 **kwargs,
             )
 
-            # 如果载入不成功将返回None, None
-            train_dataset, train_data_size = self.model.load_tfrecord(train_tfrecord_file, batch_size=batch_size, index=index, shard=shard)
-            dev_dataset, dev_data_size = self.model.load_tfrecord(dev_tfrecord_file, batch_size=batch_size)
-            test_dataset, test_data_size = self.model.load_tfrecord(test_tfrecord_file, batch_size=batch_size)
-
             with self.graph.as_default():
+                # 如果载入不成功将返回None, None
+                train_dataset, train_data_size = self.model.load_tfrecord(train_tfrecord_file, batch_size=batch_size, index=index, shard=shard)
+                dev_dataset, dev_data_size = self.model.load_tfrecord(dev_tfrecord_file, batch_size=batch_size)
+                test_dataset, test_data_size = self.model.load_tfrecord(test_tfrecord_file, batch_size=batch_size)
+
                 train_features = train_dataset.make_one_shot_iterator().get_next() if train_dataset else None
                 dev_features = dev_dataset.make_one_shot_iterator().get_next() if dev_dataset else None
                 test_features = test_dataset.make_one_shot_iterator().get_next() if test_dataset else None

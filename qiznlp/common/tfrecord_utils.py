@@ -11,6 +11,13 @@ import tensorflow as tf
 TF_VERSION = int(tf.__version__.split('.')[1])
 
 
+def get_num(tfrecord_file):
+    gen = tf.python_io.tf_record_iterator(tfrecord_file)
+    num = sum(1 for _ in gen)
+    gen.close()
+    return num
+
+
 def tf_sparse_to_dense_new(v):
     if isinstance(v, tf.sparse.SparseTensor):
         return tf.sparse.to_dense(v)
@@ -191,7 +198,6 @@ def tfrecord2dataset(tfrecord_files, feat_dct, shape_dct=None, batch_size=100, a
     if shard is not None and index is not None and index < shard:
         dataset = dataset.shard(shard, index)
         batch_size = int(np.ceil(batch_size / shard))  # batch再均分
-        
 
     dataset = dataset.map(exm_parse)
     # dataset = dataset.map(exm_parse, num_parallel_calls=tf.data.experimental.AUTOTUNE)  # need tf >= 1.14

@@ -599,6 +599,10 @@ def get_file_logger(logger_name, log_file='./zyn.log', level='DEBUG'):
 
     return logger
 
+def suppress_tf_warning(tf):
+    import warnings
+    warnings.filterwarnings('ignore')
+    tf.logging.set_verbosity(tf.logging.ERROR)
 
 if __name__ == '__main__':
     check_overlap([1, 2, 3, 4, 5, 6], [4, 5, 6, 7, 8, 9, 0])
