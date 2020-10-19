@@ -10,7 +10,7 @@ from qiznlp.common.modules.encoder import transformer_encoder, mean_pool, multi_
 import qiznlp.common.utils as utils
 
 conf = utils.dict2obj({
-    "vocab_size": 14180,
+    'vocab_size': 14180,
     'label_size': 16,
     "embed_size": 300,
     'hidden_size': 300,

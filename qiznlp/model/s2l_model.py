@@ -11,8 +11,8 @@ from qiznlp.common.modules.idcnn import IDCNN
 import qiznlp.common.utils as utils
 
 conf = utils.dict2obj({
-    "vocab_size": 1847,
-    "embed_size": 300,
+    'vocab_size': 1847,
+    'embed_size': 300,
     'label_size': 30,
     'birnn_hidden_size': 300,
     'dropout_rate': 0.2,
@@ -42,7 +42,7 @@ class Model(object):
         # 原则上模型输入输出不变，不需换新model
         self.s1 = tf.placeholder(tf.int32, [None, None], name='s1')
         self.ner_label = tf.placeholder(tf.int32, [None, None], name='ner_label')
-        self.dropout_rate = tf.placeholder(tf.float32, name="dropout_rate")
+        self.dropout_rate = tf.placeholder(tf.float32, name='dropout_rate')
 
     def build_model(self):
         # embedding
@@ -78,7 +78,7 @@ class Model(object):
         self.ner_prob = tf.identity(ner_prob, name='ner_prob')  # [batch]
         self.ner_pred = tf.identity(ner_pred, name='ner_pred')  # [batch,len]
 
-        with tf.name_scope("accuracy"):
+        with tf.name_scope('accuracy'):
             ner_acc = tf.cast(tf.equal(self.ner_pred, self.ner_label), tf.float32) * s1_mask  # [batch,length]
             ner_acc = tf.reduce_sum(ner_acc, axis=-1)  # [batch]
             ner_acc = ner_acc / tf.cast(s1_seqlen, tf.float32)  # [batch]
@@ -121,7 +121,7 @@ class Model(object):
         self.ner_prob = tf.identity(ner_prob, name='ner_prob')  # [batch]
         self.ner_pred = tf.identity(ner_pred, name='ner_pred')  # [batch,len]
 
-        with tf.name_scope("accuracy"):
+        with tf.name_scope('accuracy'):
             ner_acc = tf.cast(tf.equal(self.ner_pred, self.ner_label), tf.float32) * s1_mask  # [batch,len]
             ner_acc = tf.reduce_sum(ner_acc, axis=-1)  # [batch]
             ner_acc = ner_acc / tf.cast(s1_seqlen, tf.float32)  # [batch]

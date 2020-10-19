@@ -13,8 +13,8 @@ from qiznlp.common.modules.beam_search import beam_search, greedy_search, get_st
 import qiznlp.common.utils as utils
 
 conf = utils.dict2obj({
-    "vocab_size": 4000,
-    "embed_size": 300,
+    'vocab_size': 4000,
+    'embed_size': 300,
     'hidden_size': 300,
     'num_heads': 6,
     'num_encoder_layers': 6,
@@ -49,7 +49,7 @@ class Model(object):
         # 原则上模型输入输出不变，不需换新model
         self.s1 = tf.placeholder(tf.int32, [None, None], name='s1')
         self.s2 = tf.placeholder(tf.int32, [None, None], name='s2')
-        self.dropout_rate = tf.placeholder(tf.float32, name="dropout_rate")
+        self.dropout_rate = tf.placeholder(tf.float32, name='dropout_rate')
 
     def build_model(self):
         # embedding  # [batch,len,embed]

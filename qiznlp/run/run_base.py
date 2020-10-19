@@ -1,4 +1,4 @@
-import os, pickle, glob
+import os, pickle, glob, re
 import tensorflow as tf
 import numpy as np
 
@@ -261,3 +261,45 @@ class Run_Model_Base():
             builder.save(as_text=False)
             print(f'export pb model ok! {pbmodel_dir}')
             return pbmodel_dir
+
+
+def check_and_update_param_of_model_pyfile(param_dict, model_inst):
+    # 字典大小自动对齐
+    # param_dict = {
+    #     'vocab_size': (param_value, dict_value),
+    #     'label_size': (param_value, dict_value),
+    # }
+    param_check = {k: p_v == d_v for k, (p_v, d_v) in param_dict.items()}
+    if not all(list(param_check.values())):
+        # 获取要修改的model.py文件路径 e.g. **/**/cls_model.py
+        module_package_str = type(model_inst).__module__
+        pyfile = __import__(module_package_str, fromlist=module_package_str.split('.')).__file__
+        print('some param should be update:')
+        for param_name, check_success in param_check.items():
+            if not check_success:
+                param_value, dict_value = param_dict[param_name]
+                print(f'{param_name} | param: {param_value} != dict: {dict_value}')
+                change_param_of_pyfile(pyfile, dict_value, param=param_name)
+                print(f'update {param_name} success')
+        print('script will exit! please run the script again! e.g. python run_***.py')
+        exit(0)
+
+
+def change_param_of_pyfile(py_filename, value, param='vocab_size'):
+    with open(py_filename, 'r', encoding='U8') as f:
+        pycode_str = f.read()
+    # print(repr(pycode_str))
+    changed_pycode_str = change_param(pycode_str, value, param)
+    with open(py_filename, 'w', encoding='U8') as f:
+        f.write(changed_pycode_str)
+
+
+def change_param(pycode_str, value, param):
+    def _change_param(m):
+        # print(repr(m.group(1)))
+        # print(repr(m.group(2)))
+        return f'{m.group(1)}{value}{m.group(2)}'
+
+    # sample of pycode_str: "conf = utils.dict2obj({\\n    'vocab_size': 123,\\n    'label_size': 321,\\n"
+    changed_pycode_str = re.sub(r'([\'\"]' + param + r'[\'\"]:\s*)\d+(,\s*)', _change_param, pycode_str)
+    return changed_pycode_str

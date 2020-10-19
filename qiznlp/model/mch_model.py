@@ -10,8 +10,8 @@ from qiznlp.common.modules.birnn import Bi_RNN
 import qiznlp.common.utils as utils
 
 conf = utils.dict2obj({
-    "vocab_size": 1142,
-    "embed_size": 300,
+    'vocab_size': 1142,
+    'embed_size': 300,
     'birnn_hidden_size': 300,
     'l2_reg': 0.0001,
     'dropout_rate': 0.2,

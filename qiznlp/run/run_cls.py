@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 
 import qiznlp.common.utils as utils
-from qiznlp.run.run_base import Run_Model_Base
+from qiznlp.run.run_base import Run_Model_Base, check_and_update_param_of_model_pyfile
 
 curr_dir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(curr_dir + '/..')  # 添加上级目录即默认qiznlp根目录
@@ -107,10 +107,11 @@ class Run_Model_Cls(Run_Model_Base):
             dev_epo_steps, test_epo_steps = None, None  # 不进行验证和测试
             self.is_master = False
 
-        # 字典大小对齐
-        assert all([self.model.conf.vocab_size == len(self.token2id_dct['word2id']),
-                    self.model.conf.label_size == len(self.token2id_dct['label2id']),
-                    ]), f'{self.model.conf.vocab_size} != {len(self.token2id_dct["word2id"])} or {self.model.conf.label_size} != {len(self.token2id_dct["label2id"])}'
+        # 字典大小自动对齐
+        check_and_update_param_of_model_pyfile({
+            'vocab_size': (self.model.conf.vocab_size, len(self.token2id_dct['word2id'])),
+            'label_size': (self.model.conf.label_size, len(self.token2id_dct['label2id']))
+        }, self.model)
 
         train_info = {}
         for epo in range(1, 1 + conf.n_epochs):

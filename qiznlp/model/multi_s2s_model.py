@@ -50,7 +50,7 @@ class Model(object):
         # 原则上模型输入输出不变，不需换新model
         self.multi_s1 = tf.placeholder(tf.int32, [None, None, None], name='multi_s1')  # [batch,turn,len]
         self.s2 = tf.placeholder(tf.int32, [None, None], name='s2')
-        self.dropout_rate = tf.placeholder(tf.float32, name="dropout_rate")
+        self.dropout_rate = tf.placeholder(tf.float32, name='dropout_rate')
 
     def build_model1(self):
         self.uttn_enc_hidden_size = 256
