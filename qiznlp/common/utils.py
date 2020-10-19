@@ -524,6 +524,7 @@ class Any2Id():
         if os.path.exists(file):
             inst.load(file, deli=deli)
         else:
+            # will return inst with empty any2id , e.g. boolean(inst) or len(inst) will return False
             print(f'vocab file: {file} not found, need to build and save later')
         return inst
 
