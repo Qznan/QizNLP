@@ -3,6 +3,7 @@ import tensorflow as tf
 import numpy as np
 
 import qiznlp.common.utils as utils
+utils.suppress_tf_warning(tf)
 import qiznlp.common.train_helper as train_helper
 
 

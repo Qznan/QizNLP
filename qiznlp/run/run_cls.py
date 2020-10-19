@@ -5,7 +5,6 @@ import numpy as np
 import tensorflow as tf
 
 import qiznlp.common.utils as utils
-# utils.suppress_tf_warning(tf)
 from qiznlp.run.run_base import Run_Model_Base
 
 curr_dir = os.path.dirname(os.path.realpath(__file__))
