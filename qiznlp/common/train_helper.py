@@ -2,7 +2,6 @@
 # coding=utf-8
 import os, pickle
 import numpy as np
-from .tfrecord_utils import exist_tfrecord_file
 from . import utils
 
 
@@ -36,7 +35,7 @@ def prepare_tfrecord(raw_data_file,
         if os.path.exists(dev_txt_file): os.remove(dev_txt_file)
         if os.path.exists(test_txt_file): os.remove(test_txt_file)
 
-    if not all([exist_tfrecord_file(train_tfrecord_file), exist_tfrecord_file(dev_tfrecord_file)]) or update_tfrecord:  # 没有或需要更新tfrecord
+    if not all([os.path.exists(train_tfrecord_file), os.path.exists(dev_tfrecord_file)]) or update_tfrecord:  # 没有或需要更新tfrecord
         # 首先检查txt file
         if not all([os.path.exists(train_txt_file), os.path.exists(dev_txt_file)]):
             train_data, dev_data, test_data = preprocess_raw_data_fn(raw_data_file, tokenize=tokenize, token2id_dct=token2id_dct, **kwargs)

@@ -42,24 +42,6 @@ def flat(l):
             yield from flat(k)
 
 
-def exist_tfrecord_file(tfrecord_file):
-    files = glob.glob(f'{tfrecord_file}_*')
-    files = list(filter(lambda f: re.match(r'^.*_\d+$', f), files))  # filter invalid
-    return True if len(files) > 0 else False
-
-
-def get_tfrecord_file(tfrecord_file):
-    # 获得对应包括num的tfrecord名字
-    files = glob.glob(f'{tfrecord_file}_*')
-    files = list(filter(lambda f: re.match(r'^.*_\d+$', f), files))  # filter invalid
-    if len(files) > 0:
-        if len(files) > 1:
-            files.sort(key=lambda f: os.path.getctime(f), reverse=True)  # 优先拿最新的
-        return files[0]
-    else:
-        return None
-
-
 def delete_exist_tfrecord_file(tfrecord_file):
     files = glob.glob(f'{tfrecord_file}_*')
     files = list(filter(lambda f: re.match(r'^.*_\d+$', f), files))  # filter invalid
@@ -73,8 +55,8 @@ def add_num(file, num):
 
 
 def items2tfrecord(items, tfrecord_file):
-    # 删除已有的
-    delete_exist_tfrecord_file(tfrecord_file)
+    if os.path.exists(tfrecord_file):  # 删除已有的
+        os.remove(tfrecord_file)
 
     def int_feat(value):
         if not isinstance(value, (list, np.ndarray)):
@@ -120,11 +102,9 @@ def items2tfrecord(items, tfrecord_file):
         writer.write(example.SerializeToString())
         count += 1
     writer.close()
-    add_num_name = add_num(tfrecord_file, count)
-    os.rename(tfrecord_file, add_num_name)
     if count == 0:
         raise Exception(f'error! count = {count} no example to save')
-    print(f'save tfrecord file ok! {add_num_name} total count: {count}')
+    print(f'save tfrecord file ok! {tfrecord_file} total count: {count}')
     return count
 
 
@@ -148,24 +128,11 @@ def tfrecord2dataset(tfrecord_files, feat_dct, shape_dct=None, batch_size=100, a
     # for i in train_step:
     #     features = sess.run(dataset_features)
 
-    # 首先根据传入的tfrecord_file名字得到num
     if not isinstance(tfrecord_files, list):
         tfrecord_files = [tfrecord_files]
-    total_count = 0
-    files = []
-    for file in tfrecord_files:
-        if re.match(r'^.*_\d+$', file):  # 传入的是已经有数字了
-            files.append(file)
-            total_count += int(file.rsplit('_', 1)[1])
-            continue
-        file_ = get_tfrecord_file(file)
-        if file_ is None:
-            print(f'valid tfrecord(with num) file {file} is not found!')
-            continue
-        files.append(file_)
-        total_count += int(file_.rsplit('_', 1)[1])
-    tfrecord_files = files
-    print(f'load tfrecord file ok! {" & ".join(tfrecord_files)} total count: {total_count}')
+    tfrecord_files = [f for f in tfrecord_files if os.path.exists(f)]
+    total_count = sum(get_num(f) for f in tfrecord_files)
+    print(f'load exist tfrecord file ok! {" & ".join(tfrecord_files)} total count: {total_count}')
 
     def exm_parse(serialized_example):
         parsed_features = tf.parse_single_example(serialized_example, features=feat_dct)

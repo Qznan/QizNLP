@@ -264,8 +264,8 @@ class Model(object):
 
     @classmethod
     def load_tfrecord(cls, tfrecord_file, batch_size=128, index=None, shard=None):
-        from qiznlp.common.tfrecord_utils import tfrecord2dataset, exist_tfrecord_file
-        if not exist_tfrecord_file(tfrecord_file):
+        from qiznlp.common.tfrecord_utils import tfrecord2dataset
+        if not os.path.exists(tfrecord_file):
             return None, None
         feat_dct = {
             's1': tf.VarLenFeature(tf.int64),

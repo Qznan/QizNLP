@@ -147,8 +147,8 @@ class Model(object):
                                                      cache=cache,  # 注意infer要cache
                                                      hidden_size=conf.embed_size,
                                                      filter_size=conf.embed_size * 4,
-                                                     num_heads=6,
-                                                     num_decoder_layers=6,
+                                                     num_heads=conf.num_heads,
+                                                     num_decoder_layers=conf.num_decoder_layers,
                                                      )
             logits = proj_logits(decoder_output, conf.embed_size, conf.vocab_size, name='share_embedding')  # [batch,1,vocab]
             ret = tf.squeeze(logits, axis=1)  # [batch,vocab]
@@ -642,8 +642,8 @@ class Model(object):
 
     @classmethod
     def load_tfrecord(cls, tfrecord_file, batch_size=128, index=None, shard=None):
-        from qiznlp.common.tfrecord_utils import tfrecord2dataset, exist_tfrecord_file
-        if not exist_tfrecord_file(tfrecord_file):
+        from qiznlp.common.tfrecord_utils import tfrecord2dataset
+        if not os.path.exists(tfrecord_file):
             return None, None
         feat_dct = {
             # 's1': tf.FixedLenFeature([50], tf.int64),
