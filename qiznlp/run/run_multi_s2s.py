@@ -44,7 +44,8 @@ class Run_Model_MS2S(Run_Model_Base):
             self.tokenize = tokenize
         self.cut = lambda t: ' '.join(self.tokenize(t))
         self.token2id_dct = {
-            'word2id': utils.Any2Id.from_file(f'{curr_dir}/../data/XHJDBchar2id.dct', use_line_no=True),
+            # 'word2id': utils.Any2Id.from_file(f'{curr_dir}/../data/ms2s_word2id.dct', use_line_no=True),  # 自有数据
+            'word2id': utils.Any2Id.from_file(f'{curr_dir}/../data/XHJDB_ms2s_char2id.dct', use_line_no=True),  # 小黄鸡+豆瓣
         }
         self.config = tf.ConfigProto(allow_soft_placement=True,
                                      gpu_options=tf.GPUOptions(allow_growth=True),
@@ -237,7 +238,7 @@ def preprocess_raw_data(file, tokenize, token2id_dct, **kwargs):
                 token2id_dct['word2id'].to_count(item[1].split(' '))
         if 'word2id' in need_to_rebuild:
             token2id_dct['word2id'].rebuild_by_counter(restrict=['<pad>', '<unk>', '<eos>'], min_freq=5, max_vocab_size=30000)
-            token2id_dct['word2id'].save(f'{curr_dir}/word2id.dct')
+            token2id_dct['word2id'].save(f'{curr_dir}/../data/ms2s_word2id.dct')
     else:
         print('使用已有词表文件...')
 
@@ -247,8 +248,12 @@ def preprocess_raw_data(file, tokenize, token2id_dct, **kwargs):
 
 
 def preprocess_common_dataset_XiaoHJ_and_Douban(file, tokenize, token2id_dct, **kwargs):
+    # 小黄鸡单轮+豆瓣多轮语料（都按子分)
+    XHJ_file = f'{curr_dir}/../data/XHJ_5w.txt'
+    DB_file = f'{curr_dir}/../data/Douban_Sess662.txt'
 
     def XiaoHJchange2items(file):
+        # 转为[src, tgt]格式 按字分
         lines = utils.file2list(file)
         items = [line.split(' ', 1) for line in lines]
         exm_lst = []
@@ -268,6 +273,7 @@ def preprocess_common_dataset_XiaoHJ_and_Douban(file, tokenize, token2id_dct, **
         return exm_lst
 
     def Doubanchange2items(file):
+        # 转为[multi_src, tgt]格式 按字分
         exm_lst = []
         sess_lst = utils.file2items(file)
         for sess in sess_lst:
@@ -278,10 +284,9 @@ def preprocess_common_dataset_XiaoHJ_and_Douban(file, tokenize, token2id_dct, **
                 exm_lst.append([multi_src, tgt])
         return exm_lst
 
-    # 转为[src, tgt]格式 且按字分
     # XiaoHJ和Douban数据不分词,直接按字分,但为了方便词典仍旧叫word2id
-    items = Doubanchange2items('../data/Douban_Sess662.txt')
-    items += XiaoHJchange2items('../data/XHJ_5w.txt')  # [['w w w$$$w w', 'w w w'],...]
+    items = XiaoHJchange2items(XHJ_file)  # [['w w w$$$w w', 'w w w'],...]
+    items += Doubanchange2items(DB_file)
 
     # 划分 不分测试集
     train_items, dev_items = utils.split_file(items, ratio='19:1', shuffle=True, seed=1234)
@@ -303,7 +308,7 @@ def preprocess_common_dataset_XiaoHJ_and_Douban(file, tokenize, token2id_dct, **
                     token2id_dct['word2id'].to_count(item[1].split(' '))
         if 'word2id' in need_to_rebuild:
             token2id_dct['word2id'].rebuild_by_counter(restrict=['<pad>', '<unk>', '<eos>'], min_freq=1, max_vocab_size=4000)
-            token2id_dct['word2id'].save(f'{curr_dir}/../data/XHJDBchar2id.dct')
+            token2id_dct['word2id'].save(f'{curr_dir}/../data/XHJDB_ms2s_char2id.dct')
     else:
         print('使用已有词表文件...')
 
@@ -311,14 +316,19 @@ def preprocess_common_dataset_XiaoHJ_and_Douban(file, tokenize, token2id_dct, **
 
 
 if __name__ == '__main__':
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # 使用CPU设为'-1'
 
-    # demo训练小黄鸡单轮+豆瓣多轮语料
-    rm_ms2s = Run_Model_MS2S('RECOSA')
+    rm_ms2s = Run_Model_MS2S('RECOSA')  # use RECOSA
+
+    # 训练自有数据
+    # rm_ms2s.train('multi_s2s_ckpt_1', '../data/multi_s2s_example_data.txt', preprocess_raw_data=preprocess_raw_data, batch_size=512)  # train
+
+    # 训练小黄鸡单轮+豆瓣多轮语料
     rm_ms2s.train('multi_s2s_ckpt_XHJDB1', '', preprocess_raw_data=preprocess_common_dataset_XiaoHJ_and_Douban, batch_size=512)  # train
-    rm_ms2s.restore('multi_s2s_ckpt_XHJDB1')  # infer
-    import readline
 
+    # demo小黄鸡+豆瓣多轮聊天机器人
+    rm_ms2s.restore('multi_s2s_ckpt_XHJDB1')  # for infer
+    import readline
     while True:
         try:
             inp = input('enter:($$$分隔多轮句子)')
@@ -330,5 +340,3 @@ if __name__ == '__main__':
         except KeyboardInterrupt:
             exit(0)
 
-    # 自己数据集训练
-    # rm_ms2s.train('multi_s2s_ckpt_1', '../data/multi_s2s_example_data.txt', preprocess_raw_data=preprocess_raw_data, batch_size=512)

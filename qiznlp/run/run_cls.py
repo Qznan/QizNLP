@@ -46,8 +46,10 @@ class Run_Model_Cls(Run_Model_Base):
             self.tokenize = tokenize
         self.cut = lambda t: ' '.join(self.tokenize(t))
         self.token2id_dct = {
-            'word2id': utils.Any2Id.from_file(f'{curr_dir}/../data/toutiaoword2id.dct', use_line_no=True),
-            'label2id': utils.Any2Id.from_file(f'{curr_dir}/../data/toutiaolabel2id.dct', use_line_no=True),
+            # 'word2id': utils.Any2Id.from_file(f'{curr_dir}/../data/cls_word2id.dct', use_line_no=True),  # 自有数据
+            # 'label2id': utils.Any2Id.from_file(f'{curr_dir}/../data/cls_label2id.dct', use_line_no=True),  # 自有数据
+            'word2id': utils.Any2Id.from_file(f'{curr_dir}/../data/toutiao_cls_word2id.dct', use_line_no=True),  # toutiao新闻
+            'label2id': utils.Any2Id.from_file(f'{curr_dir}/../data/toutiao_cls_label2id.dct', use_line_no=True),  # toutiao新闻
         }
         self.config = tf.ConfigProto(allow_soft_placement=True,
                                      gpu_options=tf.GPUOptions(allow_growth=True),
@@ -252,10 +254,10 @@ def preprocess_raw_data(file, tokenize, token2id_dct, **kwargs):
                 token2id_dct['label2id'].to_count([item[1]])
         if 'word2id' in need_to_rebuild:
             token2id_dct['word2id'].rebuild_by_counter(restrict=['<pad>', '<unk>', '<eos>'], min_freq=5, max_vocab_size=30000)
-            token2id_dct['word2id'].save(f'{curr_dir}/../data/word2id.dct')
+            token2id_dct['word2id'].save(f'{curr_dir}/../data/cls_word2id.dct')
         if 'label2id' in need_to_rebuild:
             token2id_dct['label2id'].rebuild_by_counter(restrict=['<unk>'])
-            token2id_dct['label2id'].save(f'{curr_dir}/../data/label2id.dct')
+            token2id_dct['label2id'].save(f'{curr_dir}/../data/cls_label2id.dct')
     else:
         print('使用已有词表文件...')
 
@@ -265,13 +267,13 @@ def preprocess_raw_data(file, tokenize, token2id_dct, **kwargs):
 
 
 def preprocess_common_dataset_Toutiao(file, tokenize, token2id_dct, **kwargs):
-    train_file = '../data/train.toutiao.cls.txt'
-    dev_file = '../data/valid.toutiao.cls.txt'
-    test_file = '../data/test.toutiao.cls.txt'
+    train_file = f'{curr_dir}/../data/train.toutiao.cls.txt'
+    dev_file = f'{curr_dir}/../data/valid.toutiao.cls.txt'
+    test_file = f'{curr_dir}/../data/test.toutiao.cls.txt'
 
     items_lst = []
     for file in [train_file, dev_file, test_file]:
-        seg_file = file.rsplit('.', 1)[0] + '_seg.txt'
+        seg_file = file.rsplit('.', 1)[0] + '_seg.txt'  # 原始文本分词并保存为_seg.txt后缀文件
         if not os.path.exists(seg_file):
             items = utils.file2items(file, deli='\t')
             # 过滤
@@ -308,10 +310,10 @@ def preprocess_common_dataset_Toutiao(file, tokenize, token2id_dct, **kwargs):
                     token2id_dct['label2id'].to_count([item[1]])
         if 'word2id' in need_to_rebuild:
             token2id_dct['word2id'].rebuild_by_counter(restrict=['<pad>', '<unk>'], min_freq=1, max_vocab_size=20000)
-            token2id_dct['word2id'].save(f'{curr_dir}/../data/toutiaoword2id.dct')
+            token2id_dct['word2id'].save(f'{curr_dir}/../data/toutiao_cls_word2id.dct')
         if 'label2id' in need_to_rebuild:
             token2id_dct['label2id'].rebuild_by_counter(restrict=['<unk>'])
-            token2id_dct['label2id'].save(f'{curr_dir}/../data/toutiaolabel2id.dct')
+            token2id_dct['label2id'].save(f'{curr_dir}/../data/toutiao_cls_label2id.dct')
     else:
         print('使用已有词表文件...')
 
@@ -319,14 +321,19 @@ def preprocess_common_dataset_Toutiao(file, tokenize, token2id_dct, **kwargs):
 
 
 if __name__ == '__main__':
-    os.environ['CUDA_VISIBLE_DEVICES'] = '5'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # 使用CPU设为'-1'
 
-    # demo训练toutiao新闻语料
-    rm_cls = Run_Model_Cls('trans_mhattnpool')
+    rm_cls = Run_Model_Cls('trans_mhattnpool')  # use transformer_encoder with multi_head_pooling
+
+    # 训练自有数据
+    # rm_cls.train('cls_ckpt_1', '../data/cls_example_data.txt', preprocess_raw_data=preprocess_raw_data, batch_size=512)  # train
+
+    # 训练toutiao新闻语料
     rm_cls.train('cls_ckpt_toutiao1', '', preprocess_raw_data=preprocess_common_dataset_Toutiao, batch_size=128)  # train
-    rm_cls.restore('cls_ckpt_toutiao1')  # infer
-    import readline
 
+    # demo头条新闻分类
+    rm_cls.restore('cls_ckpt_toutiao1')  # for infer
+    import readline
     while True:
         try:
             sent = input('enter:')
@@ -338,5 +345,3 @@ if __name__ == '__main__':
         except KeyboardInterrupt:
             exit(0)
 
-    # 自己数据集训练
-    # rm_cls.train('cls_ckpt_1', '../data/cls_example_data.txt', preprocess_raw_data=preprocess_raw_data, batch_size=512)

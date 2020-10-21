@@ -40,8 +40,8 @@ class Run_Model_S2L(Run_Model_Base):
             self.tokenize = tokenize
         self.cut = lambda t: ' '.join(self.tokenize(t))
         self.token2id_dct = {
-            'char2id': utils.Any2Id.from_file(f'{curr_dir}/../data/rnerchar2id.dct', use_line_no=True),
-            'bmeo2id': utils.Any2Id.from_file(f'{curr_dir}/../data/rnerbmeo2id.dct', use_line_no=True),
+            'char2id': utils.Any2Id.from_file(f'{curr_dir}/../data/rner_s2l_char2id.dct', use_line_no=True),  # ResumeNER
+            'bmeo2id': utils.Any2Id.from_file(f'{curr_dir}/../data/rner_s2l_bmeo2id.dct', use_line_no=True),  # ResumeNER
         }
         self.config = tf.ConfigProto(allow_soft_placement=True,
                                      gpu_options=tf.GPUOptions(allow_growth=True),
@@ -206,9 +206,9 @@ class Run_Model_S2L(Run_Model_Base):
 
 
 def preprocess_common_dataset_ResumeNER(file, tokenize, token2id_dct, **kwargs):
-    train_file = '../data/train.char.bmes.txt'
-    dev_file = '../data/dev.char.bmes.txt'
-    test_file = '../data/test.char.bmes.txt'
+    train_file = f'{curr_dir}/../data/train.char.bmes.txt'
+    dev_file = f'{curr_dir}/../data/dev.char.bmes.txt'
+    test_file = f'{curr_dir}/../data/test.char.bmes.txt'
 
     # 转为行 用空格分隔
     def change2line(file):
@@ -250,10 +250,10 @@ def preprocess_common_dataset_ResumeNER(file, tokenize, token2id_dct, **kwargs):
                     token2id_dct['bmeo2id'].to_count(item[1].split(' '))
         if 'char2id' in need_to_rebuild:
             token2id_dct['char2id'].rebuild_by_counter(restrict=['<pad>', '<unk>'], min_freq=1, max_vocab_size=5000)
-            token2id_dct['char2id'].save(f'{curr_dir}/../data/rnerchar2id.dct')
+            token2id_dct['char2id'].save(f'{curr_dir}/../data/rner_s2l_char2id.dct')
         if 'bmeo2id' in need_to_rebuild:
             token2id_dct['bmeo2id'].rebuild_by_counter(restrict=['<pad>', '<unk>'])
-            token2id_dct['bmeo2id'].save(f'{curr_dir}/../data/rnerbmeo2id.dct')
+            token2id_dct['bmeo2id'].save(f'{curr_dir}/../data/rner_s2l_bmeo2id.dct')
     else:
         print('使用已有词表文件...')
 
@@ -261,14 +261,19 @@ def preprocess_common_dataset_ResumeNER(file, tokenize, token2id_dct, **kwargs):
 
 
 if __name__ == '__main__':
-    os.environ['CUDA_VISIBLE_DEVICES'] = '3'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # 使用CPU设为'-1'
 
-    # demo训练ResumeNER
-    rm_s2l = Run_Model_S2L('birnn')
+    rm_s2l = Run_Model_S2L('birnn')  # use BiLSTM
+
+    # 训练自有数据
+    # rm_s2l.train('s2l_ckpt_1', '../data/s2l_example_data.txt', preprocess_raw_data=preprocess_raw_data, batch_size=512)  # train
+
+    # 训练ResumeNER语料
     rm_s2l.train('s2l_ckpt_RNER1', '', preprocess_raw_data=preprocess_common_dataset_ResumeNER, batch_size=256)  # train
-    rm_s2l.restore('s2l_ckpt_RNER1')  # infer
-    import readline
 
+    # demo命名实体识别ResumeNER
+    rm_s2l.restore('s2l_ckpt_RNER1')  # for infer
+    import readline
     while True:
         try:
             inp = input('enter:')
@@ -279,6 +284,3 @@ if __name__ == '__main__':
             print('elapsed:', time.time() - time0)
         except KeyboardInterrupt:
             exit(0)
-
-    # 自己数据集训练
-    # rm_mch.train('s2l_ckpt_1', '../data/s2l_example_data.txt', preprocess_raw_data=preprocess_raw_data, batch_size=512)

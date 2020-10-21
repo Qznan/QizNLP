@@ -41,7 +41,9 @@ class Run_Model_S2S(Run_Model_Base):
             self.tokenize = tokenize
         self.cut = lambda t: ' '.join(self.tokenize(t))
         self.token2id_dct = {
-            'word2id': utils.Any2Id.from_file(f'{curr_dir}/../data/XHJchar2id.dct', use_line_no=True),
+            # 'word2id': utils.Any2Id.from_file(f'{curr_dir}/../data/s2s_char2id.dct', use_line_no=True),  # 自有数据
+            'word2id': utils.Any2Id.from_file(f'{curr_dir}/../data/XHJ_s2s_char2id.dct', use_line_no=True),  # 小黄鸡
+            # 'word2id': utils.Any2Id.from_file(f'{curr_dir}/../data/LCCC_s2s_word2id.dct', use_line_no=True),  # LCCC
         }
         self.config = tf.ConfigProto(allow_soft_placement=True,
                                      gpu_options=tf.GPUOptions(allow_growth=True),
@@ -234,7 +236,7 @@ def preprocess_raw_data(file, tokenize, token2id_dct, **kwargs):
                 token2id_dct['word2id'].to_count(item[1].split(' '))
         if 'word2id' in need_to_rebuild:
             token2id_dct['word2id'].rebuild_by_counter(restrict=['<pad>', '<unk>', '<eos>'], min_freq=5, max_vocab_size=30000)
-            token2id_dct['word2id'].save(f'{curr_dir}/word2id.dct')
+            token2id_dct['word2id'].save(f'{curr_dir}/../data/s2s_word2id.dct')
     else:
         print('使用已有词表文件...')
 
@@ -244,7 +246,11 @@ def preprocess_raw_data(file, tokenize, token2id_dct, **kwargs):
 
 
 def preprocess_common_dataset_XiaoHJ(file, tokenize, token2id_dct, **kwargs):
+    # 小黄鸡语料（直接按字分）
+    file = f'{curr_dir}/../data/XHJ_5w.txt'
+
     def change2items(file):
+        # 转为[src, tgt]格式 且按字分
         lines = utils.file2list(file)
         items = [line.split(' ', 1) for line in lines]
         exm_lst = []
@@ -263,9 +269,8 @@ def preprocess_common_dataset_XiaoHJ(file, tokenize, token2id_dct, **kwargs):
             exm_lst.extend([[' '.join(src), ' '.join(tgt)] for src, tgt in src_tgt_lst])
         return exm_lst
 
-    # 转为[src, tgt]格式 且按字分
     # XiaoHJ数据不分词,直接按字分,但为了方便词典仍旧叫word2id
-    items = change2items('../data/XHJ_5w.txt')
+    items = change2items(file)
 
     # 划分 不分测试集
     train_items, dev_items = utils.split_file(items, ratio='19:1', shuffle=True, seed=1234)
@@ -286,22 +291,75 @@ def preprocess_common_dataset_XiaoHJ(file, tokenize, token2id_dct, **kwargs):
                     token2id_dct['word2id'].to_count(item[1].split(' '))  # 按字分
         if 'word2id' in need_to_rebuild:
             token2id_dct['word2id'].rebuild_by_counter(restrict=['<pad>', '<unk>', '<eos>'], min_freq=1, max_vocab_size=4000)
-            token2id_dct['word2id'].save(f'{curr_dir}/../data/XHJchar2id.dct')
+            token2id_dct['word2id'].save(f'{curr_dir}/../data/XHJ_s2s_char2id.dct')
     else:
         print('使用已有词表文件...')
-
     return train_items, dev_items, None
 
 
+def preprocess_common_dataset_LCCC(file, tokenize, token2id_dct, **kwargs):
+    # LCCC语料（已分词）
+    import json
+    # please download LCCC corpus (https://github.com/thu-coai/CDial-GPT)
+    # by yourself and save in data dir like follow:
+    train_file = f'{curr_dir}/../data/LCCC-base-split/LCCC-base_train.json'
+    dev_file = f'{curr_dir}/../data/LCCC-base-split/LCCC-base_valid.json'
+    test_file = f'{curr_dir}/../data/LCCC-base-split/LCCC-base_test.json'
+
+    def change2items(file):
+        corpus_data = json.load(open(file, 'r', encoding='U8'))
+        exm_lst = []
+        # transform multi-turn session to single-turn example
+        for sess in corpus_data:  # sess: sent list
+            src_tgt_lst = zip(sess, sess[1:])
+            for src, tgt in src_tgt_lst:
+                exm_lst.append([src, tgt])  # already segment
+        return exm_lst
+
+    train_items = change2items(train_file)
+    dev_items = change2items(dev_file)
+    test_items = change2items(test_file)
+
+    # 构造词典(option)
+    need_to_rebuild = []
+    for name, any2id in token2id_dct.items():
+        if not any2id:  # len(any2id) = 0
+            print(f'字典{name} 载入不成功, 将生成并保存')
+            need_to_rebuild.append(name)
+
+    if need_to_rebuild:
+        print(f'生成词表文件...{need_to_rebuild}')
+        for items in [train_items, dev_items]:  # 字典只统计train,dev
+            for item in items:
+                if 'word2id' in need_to_rebuild:
+                    token2id_dct['word2id'].to_count(item[0].split(' '))
+                    token2id_dct['word2id'].to_count(item[1].split(' '))
+        if 'word2id' in need_to_rebuild:
+            token2id_dct['word2id'].rebuild_by_counter(restrict=['<pad>', '<unk>', '<eos>'], min_freq=100, max_vocab_size=40000)
+            token2id_dct['word2id'].save(f'{curr_dir}/../data/LCCC_s2s_word2id.dct')
+
+    else:
+        print('使用已有词表文件...')
+    return train_items, dev_items, test_items
+
+
 if __name__ == '__main__':
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # 使用CPU设为'-1'
 
-    # demo训练小黄鸡
-    rm_s2s = Run_Model_S2S('trans')
+    rm_s2s = Run_Model_S2S('trans')  # use transformer seq2seq
+
+    # 训练自有数据
+    # rm_s2s.train('s2s_ckpt_1', '../data/s2s_example_data.txt', preprocess_raw_data=preprocess_raw_data, batch_size=512)  # train
+
+    # 训练小黄鸡
     rm_s2s.train('s2s_ckpt_XHJ1', '', preprocess_raw_data=preprocess_common_dataset_XiaoHJ, batch_size=512)  # train
-    rm_s2s.restore('s2s_ckpt_XHJ1')  # infer
-    import readline
 
+    # 训练LCCC语料
+    # rm_s2s.train('s2s_ckpt_LCCC1', '', preprocess_raw_data=preprocess_common_dataset_LCCC, batch_size=512)  # train
+
+    # demo小黄鸡聊天机器人
+    rm_s2s.restore('s2s_ckpt_XHJ1')  # for infer
+    import readline
     while True:
         try:
             inp = input('enter:')
@@ -312,6 +370,3 @@ if __name__ == '__main__':
             print('elapsed:', time.time() - time0)
         except KeyboardInterrupt:
             exit(0)
-
-    # 自己数据集训练
-    # rm_s2s.train('s2s_ckpt_1', '../data/s2s_example_data.txt', preprocess_raw_data=preprocess_raw_data, batch_size=512)

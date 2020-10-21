@@ -42,7 +42,7 @@ class Run_Model_Mch(Run_Model_Base):
             self.tokenize = tokenize
         self.cut = lambda t: ' '.join(self.tokenize(t))
         self.token2id_dct = {
-            'word2id': utils.Any2Id.from_file(f'{curr_dir}/../data/mchword2id.dct', use_line_no=True),
+            'word2id': utils.Any2Id.from_file(f'{curr_dir}/../data/mch_word2id.dct', use_line_no=True),  # 自有数据
         }
         self.config = tf.ConfigProto(allow_soft_placement=True,
                                      gpu_options=tf.GPUOptions(allow_growth=True),
@@ -257,7 +257,7 @@ def preprocess_raw_data(file, tokenize, token2id_dct, **kwargs):
                 token2id_dct['word2id'].to_count(item[1].split(' '))
         if 'word2id' in need_to_rebuild:
             token2id_dct['word2id'].rebuild_by_counter(restrict=['<pad>', '<unk>', '<eos>'], min_freq=5, max_vocab_size=30000)
-            token2id_dct['word2id'].save(f'{curr_dir}/../data/mchword2id.dct')
+            token2id_dct['word2id'].save(f'{curr_dir}/../data/mch_word2id.dct')
     else:
         print('使用已有词表文件...')
 
@@ -270,14 +270,16 @@ def preprocess_raw_data(file, tokenize, token2id_dct, **kwargs):
 
 
 if __name__ == '__main__':
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # 使用CPU设为'-1'
 
-    # 自己数据集训练
-    rm_mch = Run_Model_Mch('esim')
+    rm_mch = Run_Model_Mch('esim')  # use ESIM match model
+
+    # 训练自有数据
     rm_mch.train('mch_ckpt_1', '../data/mch_example_data.txt', preprocess_raw_data=preprocess_raw_data, batch_size=512)  # train
-    rm_mch.restore('mch_ckpt_1')  # infer
-    import readline
 
+    # demo自有数据语义匹配模型
+    rm_mch.restore('mch_ckpt_1')  # for infer
+    import readline
     while True:
         inp = input('(use ||| to split) enter:')
         sent1, sent2 = inp.split('|||')

@@ -39,14 +39,15 @@ class Run_Model_MMCH(Run_Model_Base):
         self.model_name = model_name
         if tokenize is None:
             self.jieba = jieba.Tokenizer()
-            # self.jieba.load_userdict(f'{curr_dir}/segword.dct')
+            # self.jieba.load_userdict(f'{curr_dir}/../data/segword.dct')
             self.tokenize = lambda t: self.jieba.lcut(re.sub(r'\s+', '，', t))
         else:
             self.tokenize = tokenize
         self.cut = lambda t: ' '.join(self.tokenize(t))
         self.token2id_dct = {
-            'word2id': utils.Any2Id.from_file(f'{curr_dir}/../data/DBword2id.dct', use_line_no=True),
-            'char2id': utils.Any2Id.from_file(f'{curr_dir}/../data/DBchar2id.dct', use_line_no=True),
+            # 'word2id': utils.Any2Id.from_file(f'{curr_dir}/../data/mmch_word2id.dct', use_line_no=True),  # 自有数据
+            'word2id': utils.Any2Id.from_file(f'{curr_dir}/../data/DB_mmch_word2id.dct', use_line_no=True),  # 豆瓣多轮语料
+            'char2id': utils.Any2Id.from_file(f'{curr_dir}/../data/DB_mmch_char2id.dct', use_line_no=True),  # 豆瓣多轮语料
         }
         self.config = tf.ConfigProto(allow_soft_placement=True,
                                      gpu_options=tf.GPUOptions(allow_growth=True),
@@ -264,7 +265,7 @@ def preprocess_raw_data(file, tokenize, token2id_dct, **kwargs):
                 token2id_dct['word2id'].to_count(item[1].split(' '))
         if 'word2id' in need_to_rebuild:
             token2id_dct['word2id'].rebuild_by_counter(restrict=['<pad>', '<unk>', '<eos>'], min_freq=5, max_vocab_size=30000)
-            token2id_dct['word2id'].save(f'{curr_dir}/word2id.dct')
+            token2id_dct['word2id'].save(f'{curr_dir}/../data/mmch_word2id.dct')
     else:
         print('使用已有词表文件...')
 
@@ -274,7 +275,12 @@ def preprocess_raw_data(file, tokenize, token2id_dct, **kwargs):
 
 
 def preprocess_common_dataset_Douban(file, tokenize, token2id_dct, **kwargs):
+    # 豆瓣多轮语料
+    # 对话数据分词,且生成词和字的字典word2id char2id
+    file = f'{curr_dir}/../data/Douban_Sess662.txt'
+
     def Doubanchange2items(file):
+        # 转为[multi_src, tgt]格式
         # 分词
         seg_file = file.rsplit('.', 1)[0] + '_seg.txt'
         if not os.path.exists(seg_file):
@@ -297,9 +303,7 @@ def preprocess_common_dataset_Douban(file, tokenize, token2id_dct, **kwargs):
                 exm_lst.append([multi_src, tgt])
         return exm_lst
 
-    # 转为[src, tgt]格式 且按字分
-    # Douban多轮对话数据分词,且生成词和字的字典word2id char2id
-    items = Doubanchange2items('../data/Douban_Sess662.txt')  # [['w w w$$$w w', 'w w w'],...]
+    items = Doubanchange2items(file)  # [['w w w$$$w w', 'w w w'],...]
 
     # 划分 不分测试集
     train_items, dev_items = utils.split_file(items, ratio='19:1', shuffle=True, seed=1234)
@@ -325,10 +329,10 @@ def preprocess_common_dataset_Douban(file, tokenize, token2id_dct, **kwargs):
                     token2id_dct['char2id'].to_count(list(item[1].replace(' ', '')))
         if 'word2id' in need_to_rebuild:
             token2id_dct['word2id'].rebuild_by_counter(restrict=['<pad>', '<unk>', '<eos>'], min_freq=1, max_vocab_size=30000)
-            token2id_dct['word2id'].save(f'{curr_dir}/../data/DBword2id.dct')
+            token2id_dct['word2id'].save(f'{curr_dir}/../data/DB_mmch_word2id.dct')
         if 'char2id' in need_to_rebuild:
             token2id_dct['char2id'].rebuild_by_counter(restrict=['<pad>', '<unk>', '<eos>'], min_freq=1, max_vocab_size=4000)
-            token2id_dct['char2id'].save(f'{curr_dir}/../data/DBchar2id.dct')
+            token2id_dct['char2id'].save(f'{curr_dir}/../data/DB_mmch_char2id.dct')
     else:
         print('使用已有词表文件...')
 
@@ -339,17 +343,22 @@ def preprocess_common_dataset_Douban(file, tokenize, token2id_dct, **kwargs):
 
 
 if __name__ == '__main__':
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # 使用CPU设为'-1'
 
-    # demo豆瓣多轮语料
-    rm_mmch = Run_Model_MMCH('MRFM')
+    rm_mmch = Run_Model_MMCH('MRFN')  # use MRFN
+
+    # 训练自有数据
+    # rm_mmch.train('multi_mch_ckpt_1', '../data/multi_mch_example_data.txt', preprocess_raw_data=preprocess_raw_data, batch_size=512)  # train
+
+    # 训练豆瓣多轮语料
     rm_mmch.train('multi_mch_ckpt_DB1', '', preprocess_raw_data=preprocess_common_dataset_Douban, batch_size=128)  # train
-    rm_mmch.restore('multi_mch_ckpt_DB1')  # infer
-    import readline
 
+    # demo豆瓣多轮检索式对话模型
+    rm_mmch.restore('multi_mch_ckpt_DB1')  # for infer
+    import readline
     while True:
         try:
-            inp = input('enter:($$$分隔多轮句子,|||分隔问句答句)')
+            inp = input('enter:($$$分隔多轮句子,|||分隔问句与答句)')
             sent1, sent2 = inp.split('|||')
             need_cut = False if ' ' in sent1 else True
             time0 = time.time()
@@ -360,6 +369,3 @@ if __name__ == '__main__':
             exit(0)
         except Exception as e:
             print(e)
-
-    # 自己数据集训练
-    # rm_mmch.train('multi_mch_ckpt_1', '../data/multi_mch_example_data.txt', preprocess_raw_data=preprocess_raw_data, batch_size=512)

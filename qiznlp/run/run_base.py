@@ -41,8 +41,8 @@ class Run_Model_Base():
 
         self.saver.save(self.sess, save_path, global_step=global_step)
         # e.g.
-        # mrfn-2-1.23-1.18.ckpt-228.index
-        # mrfn-2-1.23-1.18.ckpt-228.meta
+        # trans-2-1.23-1.18.ckpt-228.index
+        # trans-2-1.23-1.18.ckpt-228.meta
         print(f'>>>>>> save ckpt ok! {save_path}')
 
     def restore(self, ckpt_dir, model_name=None, epo=None, step=None):
