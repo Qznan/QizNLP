@@ -437,9 +437,12 @@ class Any2Id():
         self.fix = fix
         self.use_line_no = use_line_no
         self.counter = Counter() if not counter else counter
-        self.any2id = {}
+        self.any2id = {}  # 内部核心dict
         if exist_dict is not None:
             self.any2id.update(exist_dict)
+
+        # for method_name in dict.__dict__:  # 除了下面显式定义外保证能以dict的各种方法操作Any2id
+        #     setattr(self, method_name, getattr(self.any2id, method_name))
 
     def keys(self):
         return self.any2id.keys()
@@ -449,6 +452,9 @@ class Any2Id():
 
     def items(self):
         return self.any2id.items()
+
+    def pop(self, key):
+        return self.any2id.pop(key)
 
     def __getitem__(self, item):
         return self.any2id.__getitem__(item)
@@ -530,11 +536,16 @@ class Any2Id():
 
 
 def pad_sequences(sequences, maxlen=None, dtype='int32', padding='pre', truncating='pre', value=0.):
-    assert hasattr(sequences, '__len__')
-    len_lst = []
-    for x in sequences:
-        assert hasattr(x, '__len__')
-        len_lst.append(len(x))
+    if not hasattr(sequences, '__len__') or not all([hasattr(x, '__len__') for x in sequences]):
+        raise ValueError(f'sequences invalid: {sequences}')
+
+    len_lst = [len(x) for x in sequences]
+
+    if len(set(len_lst)) == 1:  # 长度均相等
+        ret = np.array(sequences)
+        if maxlen is not None:
+            ret = ret[:,-maxlen:] if truncating=='pre' else ret[:,:maxlen]
+        return ret
 
     num_samples = len(sequences)
     if maxlen is None:
