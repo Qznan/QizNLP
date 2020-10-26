@@ -73,6 +73,7 @@ def items2tfrecord(items, tfrecord_file):
             value = [value]
         return tf.train.Feature(bytesList=tf.train.BytesList(value=value))
 
+    print(f'generating tfrecord... filename: {tfrecord_file}')
     writer = tf.python_io.TFRecordWriter(tfrecord_file)
     count = 0
     for item in items:
@@ -81,7 +82,7 @@ def items2tfrecord(items, tfrecord_file):
         features = {}
         try:
             for k, v in item.items():
-                # maybe_flatten
+                # maybe should flatten
                 if isinstance(v, np.ndarray) and v.ndim > 1:
                     v = v.flatten()
                 elif isinstance(v, list) and isinstance(v[0], list):

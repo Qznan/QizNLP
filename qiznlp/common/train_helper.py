@@ -40,15 +40,15 @@ def prepare_tfrecord(raw_data_file,
         if not all([os.path.exists(train_txt_file), os.path.exists(dev_txt_file)]):
             train_data, dev_data, test_data = preprocess_raw_data_fn(raw_data_file, tokenize=tokenize, token2id_dct=token2id_dct, **kwargs)
             if train_data:
+                print(f'generating train txt file... filename: {train_txt_file}')
                 utils.list2file(train_txt_file, train_data)
-                print(f'generate train txt file ok! {train_txt_file}')
             if dev_data:
+                print(f'generating dev txt file... filename: {dev_txt_file}')
                 utils.list2file(dev_txt_file, dev_data)
-                print(f'generate dev txt file ok! {dev_txt_file}')
             if test_data:
+                print(f'generating test txt file... filename: {test_txt_file}')
                 utils.list2file(test_txt_file, test_data)
-                print(f'generate test txt file ok! {test_txt_file}')
-        
+
         if os.path.exists(train_txt_file):
             model.generate_tfrecord(train_txt_file, token2id_dct, train_tfrecord_file)
         if os.path.exists(dev_txt_file):
