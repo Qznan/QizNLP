@@ -43,7 +43,7 @@ class Run_Model_S2S(Run_Model_Base):
         self.token2id_dct = {
             # 'word2id': utils.Any2Id.from_file(f'{curr_dir}/../data/s2s_char2id.dct', use_line_no=True),  # 自有数据
             'word2id': utils.Any2Id.from_file(f'{curr_dir}/../data/XHJ_s2s_char2id.dct', use_line_no=True),  # 小黄鸡
-            # 'word2id': utils.Any2Id.from_file(f'{curr_dir}/../data/LCCC_s2s_word2id.dct', use_line_no=True),  # LCCC
+            # 'word2id': utils.Any2Id.from_file(f'{curr_dir}/../data/LCCC_s2s_char2id.dct', use_line_no=True),  # LCCC
         }
         self.config = tf.ConfigProto(allow_soft_placement=True,
                                      gpu_options=tf.GPUOptions(allow_growth=True),
@@ -61,9 +61,9 @@ class Run_Model_S2S(Run_Model_Base):
             self.model = S2S_Model.from_pbmodel(pbmodel_dir, self.sess)
         else:
             with self.graph.as_default():
-                self.model = S2S_Model(model_name=self.model_name)
+                self.model = S2S_Model(model_name=self.model_name, run_model=self)
                 if self.use_hvd:
-                    self.model.optimizer._lr = self.model.optimizer._lr * hvd.size()  # 分布式训练大batch增大学习率
+                    self.model.optimizer._lr = self.model.optimizer._lr * self.hvd_size  # 分布式训练大batch增大学习率
                     self.model.hvd_optimizer = hvd.DistributedOptimizer(self.model.optimizer)
                     self.model.train_op = self.model.hvd_optimizer.minimize(self.model.loss, global_step=self.model.global_step)
                 self.sess.run(tf.global_variables_initializer())
@@ -87,12 +87,13 @@ class Run_Model_S2S(Run_Model_Base):
                               feed_dict=feed_dict)
         return loss
 
-    def train(self, ckpt_dir, raw_data_file, preprocess_raw_data, batch_size=100):
+    def train(self, ckpt_dir, raw_data_file, preprocess_raw_data, batch_size=100, save_data_prefix=None):
+        save_data_prefix = os.path.basename(ckpt_dir) if save_data_prefix is None else save_data_prefix
         train_epo_steps, dev_epo_steps, test_epo_steps, gen_feed_dict = self.prepare_data(conf.data_type,
                                                                                           raw_data_file,
                                                                                           preprocess_raw_data,
                                                                                           batch_size,
-                                                                                          save_data_prefix=os.path.basename(ckpt_dir),
+                                                                                          save_data_prefix=save_data_prefix,
                                                                                           update_txt=False
                                                                                           )
         self.is_master = True
@@ -166,6 +167,7 @@ class Run_Model_S2S(Run_Model_Base):
                 self.save(ckpt_dir=ckpt_dir, epo=epo, info_str=info_str)
 
             utils.obj2json(train_info, f'{ckpt_dir}/metrics.json')
+            print('=' * 40, end='\n')
             if conf.early_stop_patience:
                 if self.stop_training(conf.early_stop_patience, train_info, 'dev_loss', greater_is_better=False):
                     print('early stop training!')
@@ -188,16 +190,17 @@ class Run_Model_S2S(Run_Model_Base):
             for batch_idx in range(len(s2_ids)):
                 beam_sents = s2_ids[batch_idx]
                 for beam_idx, sent in enumerate(beam_sents):
-                    while sent[-1] == self.word2id['<pad>']:
+                    while sent[-1] == self.word2id['<pad>'] or sent[-1] == self.word2id['<eos>']:
                         sent.pop(-1)
                     beam_sents[beam_idx] = ''.join([self.id2word.get(wid, '<unk>') for wid in sent])
                 pred_s2_lst.append(beam_sents)
-        return pred_s2_lst
+        return pred_s2_lst, s2_score
 
 
 def preprocess_raw_data(file, tokenize, token2id_dct, **kwargs):
     """
-    # 自供数据 自定义数据处理函数模板
+    # 处理自有数据函数模板
+    # file文件数据格式: 句子1\t句子2
     # [filter] 过滤
     # [segment] 分词
     # [build vocab] 构造词典
@@ -221,6 +224,9 @@ def preprocess_raw_data(file, tokenize, token2id_dct, **kwargs):
         # 读取分词好的数据
         items = utils.file2items(seg_file)
 
+    # 划分 不分测试集
+    train_items, dev_items = utils.split_file(items, ratio='19:1', shuffle=True, seed=1234)
+
     # 构造词典(option)
     need_to_rebuild = []
     for token2id_name in token2id_dct:
@@ -230,18 +236,18 @@ def preprocess_raw_data(file, tokenize, token2id_dct, **kwargs):
 
     if need_to_rebuild:
         print(f'生成缺失词表文件...{need_to_rebuild}')
-        for item in items:
-            if 'word2id' in need_to_rebuild:
-                token2id_dct['word2id'].to_count(item[0].split(' '))
-                token2id_dct['word2id'].to_count(item[1].split(' '))
+        for items in [train_items, dev_items]:  # 字典只统计train和dev
+            for item in items:
+                if 'word2id' in need_to_rebuild:
+                    token2id_dct['word2id'].to_count(item[0].split(' '))
+                    token2id_dct['word2id'].to_count(item[1].split(' '))
         if 'word2id' in need_to_rebuild:
             token2id_dct['word2id'].rebuild_by_counter(restrict=['<pad>', '<unk>', '<eos>'], min_freq=5, max_vocab_size=30000)
             token2id_dct['word2id'].save(f'{curr_dir}/../data/s2s_word2id.dct')
     else:
         print('使用已有词表文件...')
 
-    # 切分数据集
-    train_items, dev_items = utils.split_file(items, ratio='19:1', shuffle=True, seed=1234)
+
     return train_items, dev_items, None
 
 
@@ -313,6 +319,8 @@ def preprocess_common_dataset_LCCC(file, tokenize, token2id_dct, **kwargs):
         for sess in corpus_data:  # sess: sent list
             src_tgt_lst = zip(sess, sess[1:])
             for src, tgt in src_tgt_lst:
+                src = ' '.join(src.replace(' ', ''))  # 按字分
+                tgt = ' '.join(tgt.replace(' ', ''))  # 按字分
                 exm_lst.append([src, tgt])  # already segment
         return exm_lst
 
@@ -335,8 +343,10 @@ def preprocess_common_dataset_LCCC(file, tokenize, token2id_dct, **kwargs):
                     token2id_dct['word2id'].to_count(item[0].split(' '))
                     token2id_dct['word2id'].to_count(item[1].split(' '))
         if 'word2id' in need_to_rebuild:
-            token2id_dct['word2id'].rebuild_by_counter(restrict=['<pad>', '<unk>', '<eos>'], min_freq=100, max_vocab_size=40000)
-            token2id_dct['word2id'].save(f'{curr_dir}/../data/LCCC_s2s_word2id.dct')
+            # token2id_dct['word2id'].rebuild_by_counter(restrict=['<pad>', '<unk>', '<eos>'], min_freq=100, max_vocab_size=40000)
+            # token2id_dct['word2id'].save(f'{curr_dir}/../data/LCCC_s2s_word2id.dct')
+            token2id_dct['word2id'].rebuild_by_counter(restrict=['<pad>', '<unk>', '<eos>'], min_freq=10, max_vocab_size=4500)
+            token2id_dct['word2id'].save(f'{curr_dir}/../data/LCCC_s2s_char2id.dct')
 
     else:
         print('使用已有词表文件...')
@@ -347,6 +357,7 @@ if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # 使用CPU设为'-1'
 
     rm_s2s = Run_Model_S2S('trans')  # use transformer seq2seq
+    # rm_s2s = Run_Model_S2S('rnn_s2s')  # use biGRU encoder + bah_attn + GRU decoder
 
     # 训练自有数据
     # rm_s2s.train('s2s_ckpt_1', '../data/s2s_example_data.txt', preprocess_raw_data=preprocess_raw_data, batch_size=512)  # train
@@ -357,6 +368,7 @@ if __name__ == '__main__':
     # 训练LCCC语料
     # rm_s2s.train('s2s_ckpt_LCCC1', '', preprocess_raw_data=preprocess_common_dataset_LCCC, batch_size=512)  # train
 
+    # exit(0)
     # demo小黄鸡聊天机器人
     rm_s2s.restore('s2s_ckpt_XHJ1')  # for infer
     import readline
@@ -365,8 +377,8 @@ if __name__ == '__main__':
             inp = input('enter:')
             sent1 = ' '.join(inp)  # 小黄鸡分字
             time0 = time.time()
-            ret = rm_s2s.predict([sent1], need_cut=False)
-            print(ret[0])
+            batch_sent, batch_score = rm_s2s.predict([sent1], need_cut=False)
+            print(*[f'{sent_}\t{score_}' for sent_, score_, in zip(batch_sent[0], batch_score[0])], sep='\n')
             print('elapsed:', time.time() - time0)
         except KeyboardInterrupt:
             exit(0)

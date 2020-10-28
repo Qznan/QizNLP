@@ -22,24 +22,28 @@ conf = utils.dict2obj({
     'dropout_rate': 0.2,
     'lr': 1e-3,
     'pretrain_emb': None,
-    'beam_size': 5,
+    'beam_size': 30,
     'max_decode_len': 50,
     'eos_id': 2,
+    'gamma': 1,  # 多样性鼓励因子
+    'num_group': 1,
 })
 
 
 class Model(object):
     def __init__(self, build_graph=True, **kwargs):
         self.conf = conf
+        self.run_model = kwargs.get('run_model', None)  # acquire outside run_model instance
         if build_graph:
             # build placeholder
             self.build_placeholder()
             # build model
             self.model_name = kwargs.get('model_name', 'trans')
             {
-                'trans': self.build_model,
-                # 'rnn_s2s': self.build_model1,
-                'rnn_s2s': self.build_model2,
+                'trans': self.build_model1,
+                # 'rnn_s2s': self.build_model2,
+                'rnn_s2s': self.build_model3,
+                # build_model2和build_model3都是rnn_attn_s2s, 只是实现代码不同，前者使用谷歌attn模块，后者独立实现attn以方便适配beam_search。建议使用后者
                 # add new here
             }[self.model_name]()
             print(f'model_name: {self.model_name} build graph ok!')
@@ -51,7 +55,7 @@ class Model(object):
         self.s2 = tf.placeholder(tf.int32, [None, None], name='s2')
         self.dropout_rate = tf.placeholder(tf.float32, name='dropout_rate')
 
-    def build_model(self):
+    def build_model1(self):
         # embedding  # [batch,len,embed]
         s1_embed, _ = embedding(tf.expand_dims(self.s1, -1), conf.vocab_size, conf.embed_size, name='share_embedding', pretrain_embedding=conf.pretrain_emb)
         s2_embed, _ = embedding(tf.expand_dims(self.s2, -1), conf.vocab_size, conf.embed_size, name='share_embedding', pretrain_embedding=conf.pretrain_emb)
@@ -161,7 +165,7 @@ class Model(object):
             decoded_ids, scores = greedy_search(
                 symbols_to_logits_fn,
                 initial_ids,
-                conf.max_decode_len,
+                max_decode_len = conf.max_decode_len,
                 cache=cache,
                 eos_id=conf.eos_id,
             )
@@ -172,12 +176,13 @@ class Model(object):
             decoded_ids, scores = beam_search(  # [batch,beam,len] [batch,beam]
                 symbols_to_logits_fn,
                 initial_ids,
-                conf.beam_size,
-                conf.max_decode_len,
-                conf.vocab_size,
-                alpha=0,
+                beam_size = conf.beam_size,
+                max_decode_len = conf.max_decode_len,
+                vocab_size = conf.vocab_size,
                 states=cache,
                 eos_id=conf.eos_id,
+                gamma=conf.gamma,
+                num_group=conf.num_group,
             )
             return decoded_ids, scores
 
@@ -190,7 +195,8 @@ class Model(object):
         self.optimizer = tf.train.AdamOptimizer(learning_rate=conf.lr)
         self.train_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
 
-    def build_model1(self):
+    def build_model2(self):
+        # biGRU encoder + bah_attn + GRU decoder
         # embedding
         # [batch,len,embed]
         # pretrained_word_embeddings = np.load(f'{curr_dir}/pretrain_emb_300.npy')
@@ -370,7 +376,8 @@ class Model(object):
         self.optimizer = tf.train.AdamOptimizer(learning_rate=conf.lr)
         self.train_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
 
-    def build_model2(self):
+    def build_model3(self):
+        # biGRU encoder + bah_attn + GRU decoder
         # embedding
         # [batch,len,embed]
         # pretrained_word_embeddings = np.load(f'{curr_dir}/pretrain_emb_300.npy')
@@ -526,7 +533,6 @@ class Model(object):
         if max_word_len:
             token_ids = token_ids[:max_word_len - 1]
         token_ids.append(word2id['<eos>'])
-        # token_ids = pad_sequences([token_ids], padding='post', maxlen=max_word_len)[0]
         return token_ids  # [len]
 
     def create_feed_dict_from_data(self, data, ids, mode='train'):
@@ -559,25 +565,18 @@ class Model(object):
         word2id = token2id_dct['word2id']
 
         feed_s1 = [self.sent2ids(s1, word2id) for s1 in batch_s1]
-        if len(set([len(e) for e in feed_s1])) != 1:  # 长度不等
-            feed_s1 = utils.pad_sequences(feed_s1, padding='post')
 
         feed_dict = {
-            self.s1: np.array(feed_s1),
+            self.s1: utils.pad_sequences(feed_s1, padding='post'),
         }
         feed_dict[self.dropout_rate] = conf.dropout_rate if mode == 'train' else 0.
         if mode == 'infer':
             return feed_dict
 
         if mode in ['train', 'dev']:
-            feed_s2 = []
-            for s2 in batch_s2:
-                s2_np = self.sent2ids(s2, word2id)
-                feed_s2.append(s2_np)
-            if len(set([len(e) for e in feed_s2])) != 1:  # 长度不等
-                feed_s2 = utils.pad_sequences(feed_s2, padding='post')
-
-            feed_dict[self.s2] = np.array(feed_s2)
+            assert batch_s2, 'batch_s2 should not be None when mode is train or dev'
+            feed_s2 = [self.sent2ids(s2, word2id) for s2 in batch_s2]
+            feed_dict[self.s2] = utils.pad_sequences(feed_s2, padding='post')
             return feed_dict
 
         raise ValueError(f'mode type {mode} not support')
@@ -634,7 +633,8 @@ class Model(object):
                             's2': s2_ids,
                         }
                         yield d
-                    except:
+                    except Exception as e:
+                        print('Exception occur in items_gen()!\n', e)
                         continue
 
         count = items2tfrecord(items_gen(), tfrecord_file)

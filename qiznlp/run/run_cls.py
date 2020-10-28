@@ -67,7 +67,7 @@ class Run_Model_Cls(Run_Model_Base):
             self.model = CLS_Model.from_pbmodel(pbmodel_dir, self.sess)
         else:
             with self.graph.as_default():
-                self.model = CLS_Model(model_name=self.model_name)
+                self.model = CLS_Model(model_name=self.model_name, run_model=self)
                 if self.use_hvd:
                     self.model.optimizer._lr = self.model.optimizer._lr * self.hvd_size  # 分布式训练大batch增大学习率
                     self.model.hvd_optimizer = hvd.DistributedOptimizer(self.model.optimizer)
@@ -96,16 +96,17 @@ class Run_Model_Cls(Run_Model_Base):
                                                feed_dict=feed_dict)
         return loss, accuracy, y_prob
 
-    def train(self, ckpt_dir, raw_data_file, preprocess_raw_data, batch_size=100):
+    def train(self, ckpt_dir, raw_data_file, preprocess_raw_data, batch_size=100, save_data_prefix=None):
+        save_data_prefix = os.path.basename(ckpt_dir) if save_data_prefix is None else save_data_prefix
         train_epo_steps, dev_epo_steps, test_epo_steps, gen_feed_dict = self.prepare_data(conf.data_type,
                                                                                           raw_data_file,
                                                                                           preprocess_raw_data,
                                                                                           batch_size,
-                                                                                          save_data_prefix=os.path.basename(ckpt_dir),
-                                                                                          update_tfrecord=False,
+                                                                                          save_data_prefix=save_data_prefix,
+                                                                                          update_txt=True,
                                                                                           )
         self.is_master = True
-        if hasattr(self, 'hvd_rank') and self.hvd_rank != 0:  # 分布式训练且非master
+        if self.use_hvd and self.hvd_rank != 0:  # 分布式训练且非master
             dev_epo_steps, test_epo_steps = None, None  # 不进行验证和测试
             self.is_master = False
 
@@ -188,8 +189,7 @@ class Run_Model_Cls(Run_Model_Base):
                 self.save(ckpt_dir=ckpt_dir, epo=epo, info_str=info_str)
 
             utils.obj2json(train_info, f'{ckpt_dir}/metrics.json')
-            print('=' * 20)
-
+            print('=' * 40, end='\n\n')
             if conf.early_stop_patience:
                 if self.stop_training(conf.early_stop_patience, train_info, 'dev_acc'):
                     print('early stop training!')
@@ -216,6 +216,8 @@ class Run_Model_Cls(Run_Model_Base):
 
 def preprocess_raw_data(file, tokenize, token2id_dct, **kwargs):
     """
+    # 处理自有数据函数模板
+    # file文件数据格式: 句子\t类别
     # [filter] 过滤
     # [segment] 分词
     # [build vocab] 构造词典
@@ -238,6 +240,9 @@ def preprocess_raw_data(file, tokenize, token2id_dct, **kwargs):
         # 读取分词好的数据
         items = utils.file2items(seg_file)
 
+    # 划分
+    train_items, dev_items, test_items = utils.split_file(items, ratio='18:1:1', shuffle=True, seed=1234)
+
     # 构造词典(option)
     need_to_rebuild = []
     for token2id_name in token2id_dct:
@@ -247,11 +252,12 @@ def preprocess_raw_data(file, tokenize, token2id_dct, **kwargs):
 
     if need_to_rebuild:
         print(f'生成缺失词表文件...{need_to_rebuild}')
-        for item in items:
-            if 'word2id' in need_to_rebuild:
-                token2id_dct['word2id'].to_count(item[0].split(' '))
-            if 'label2id' in need_to_rebuild:
-                token2id_dct['label2id'].to_count([item[1]])
+        for items in [train_items, dev_items]:  # 字典只统计train和dev
+            for item in items:
+                if 'word2id' in need_to_rebuild:
+                    token2id_dct['word2id'].to_count(item[0].split(' '))
+                if 'label2id' in need_to_rebuild:
+                    token2id_dct['label2id'].to_count([item[1]])
         if 'word2id' in need_to_rebuild:
             token2id_dct['word2id'].rebuild_by_counter(restrict=['<pad>', '<unk>', '<eos>'], min_freq=5, max_vocab_size=30000)
             token2id_dct['word2id'].save(f'{curr_dir}/../data/cls_word2id.dct')
@@ -261,16 +267,13 @@ def preprocess_raw_data(file, tokenize, token2id_dct, **kwargs):
     else:
         print('使用已有词表文件...')
 
-    # 切分数据集
-    train_items, dev_items = utils.split_file(items, ratio='19:1', shuffle=True, seed=1234)
-    return train_items, dev_items, None
+    return train_items, dev_items, test_items
 
 
 def preprocess_common_dataset_Toutiao(file, tokenize, token2id_dct, **kwargs):
     train_file = f'{curr_dir}/../data/train.toutiao.cls.txt'
     dev_file = f'{curr_dir}/../data/valid.toutiao.cls.txt'
     test_file = f'{curr_dir}/../data/test.toutiao.cls.txt'
-
     items_lst = []
     for file in [train_file, dev_file, test_file]:
         seg_file = file.rsplit('.', 1)[0] + '_seg.txt'  # 原始文本分词并保存为_seg.txt后缀文件
@@ -323,14 +326,17 @@ def preprocess_common_dataset_Toutiao(file, tokenize, token2id_dct, **kwargs):
 if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # 使用CPU设为'-1'
 
+    # rm_cls = Run_Model_Cls('trans_meanpool')  # use transformer_encoder with mean_pooling
     rm_cls = Run_Model_Cls('trans_mhattnpool')  # use transformer_encoder with multi_head_pooling
+    # rm_cls = Run_Model_Cls('bert_cls')  # use transformer_encoder with multi_head_pooling
 
     # 训练自有数据
     # rm_cls.train('cls_ckpt_1', '../data/cls_example_data.txt', preprocess_raw_data=preprocess_raw_data, batch_size=512)  # train
 
     # 训练toutiao新闻语料
-    rm_cls.train('cls_ckpt_toutiao1', '', preprocess_raw_data=preprocess_common_dataset_Toutiao, batch_size=128)  # train
+    rm_cls.train('cls_ckpt_toutiao1', '', preprocess_raw_data=preprocess_common_dataset_Toutiao, batch_size=32)  # train
 
+    # exit(0)
     # demo头条新闻分类
     rm_cls.restore('cls_ckpt_toutiao1')  # for infer
     import readline

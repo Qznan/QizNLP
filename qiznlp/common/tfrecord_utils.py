@@ -4,9 +4,6 @@ import os, re, glob
 import numpy as np
 import tensorflow as tf
 
-""" tfrecord文件保存的名字后面均补上data数量
-    e.g. xxx.tfrecord_1234
-"""
 
 TF_VERSION = int(tf.__version__.split('.')[1])
 

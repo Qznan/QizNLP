@@ -25,14 +25,16 @@ conf = utils.dict2obj({
 class Model(object):
     def __init__(self, build_graph=True, **kwargs):
         self.conf = conf
+        self.run_model = kwargs.get('run_model', None)  # acquire outside run_model instance
         if build_graph:
             # build placeholder
             self.build_placeholder()
             # build model
             self.model_name = kwargs.get('model_name', 'birnn')
             {
-                'birnn': self.build_model,
-                'idcnn': self.build_model1,
+                'birnn': self.build_model1,
+                'idcnn': self.build_model2,
+                'bert_crf': self.build_model3,
                 # add new here
             }[self.model_name]()
             print(f'model_name: {self.model_name} build graph ok!')
@@ -44,7 +46,7 @@ class Model(object):
         self.ner_label = tf.placeholder(tf.int32, [None, None], name='ner_label')
         self.dropout_rate = tf.placeholder(tf.float32, name='dropout_rate')
 
-    def build_model(self):
+    def build_model1(self):
         # embedding
         # [batch,len,embed]
         s1_embed, _ = embedding(tf.expand_dims(self.s1, -1), conf.vocab_size, conf.embed_size, name='embedding', pretrain_embedding=conf.pretrain_emb)
@@ -88,7 +90,7 @@ class Model(object):
         self.optimizer = tf.train.AdamOptimizer(learning_rate=conf.lr)
         self.train_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
 
-    def build_model1(self):
+    def build_model2(self):
         # embedding
         # [batch,len,embed]
         # pretrained_word_embeddings = np.load(f'{curr_dir}/pretrain_emb_300.npy')
@@ -131,6 +133,150 @@ class Model(object):
         self.optimizer = tf.train.AdamOptimizer(learning_rate=conf.lr)
         self.train_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
 
+    def build_model3(self):
+        from common.modules.bert_model import BERT, get_tokenizer
+        # adapt for bert
+        bert_model_dir = f'{curr_dir}/../common/modules/bert/chinese_L-12_H-768_A-12'
+        self.s1_input_mask = tf.placeholder(tf.int32, [None, None], name='s1_input_mask')
+        self.s1_segment_ids = tf.placeholder(tf.int32, [None, None], name='s1_segment_ids')
+        self.conf.lr = 2e-5  # official recommend for bert fintune
+        bert_max_length = 128
+        self.run_model.token2id_dct['char2id'] = utils.Any2Id.from_file(os.path.join(bert_model_dir, 'vocab.txt'), use_line_no=True)  # Bert vocab dict
+        char2id = self.run_model.token2id_dct['char2id']
+        bmeo2id = self.run_model.token2id_dct['bmeo2id']
+        char2id['<unk>'] = char2id.pop('[UNK]')
+        char2id['<pad>'] = char2id.pop('[PAD]')
+
+        bert_tokenizer = get_tokenizer(os.path.join(bert_model_dir, 'vocab.txt'))
+        self.run_model.tokenize = bert_tokenizer.tokenize
+        self.run_model.cut = lambda t: ' '.join(self.run_model.tokenize(t))
+
+        # 根据bert输入重写实例的feed_dict函数
+        def _create_feed_dict_from_features(self, features, mode = 'train'):
+            s1 = features['s1'].tolist()
+            ner_label = features['ner_label'].tolist()
+            new_s1 = []
+            new_ner_label = []
+            s1_input_mask = []
+            s1_segment_ids = []
+
+            for s1_, ner_label_ in zip(s1, ner_label):  # 遍历batch
+                # remove pad
+                i = len(s1_)-1
+                while s1_[i] == char2id['<pad>']:  # [PAD]
+                    i -= 1
+                s1_ = s1_[:i+1]
+                ner_label_ = ner_label_[:i+1]
+
+                s1_ = [char2id['[CLS]']] + s1_[:bert_max_length-2] + [char2id['[SEP]']]  # [CLS] + [] + [SEP]
+                ner_label_ = [bmeo2id['O']] + ner_label_[:bert_max_length-2] + [bmeo2id['O']]  # [O] + [] + [O]
+                input_mask_ = [1] * len(s1_)
+                segment_ids_ = [0] * len(s1_)
+
+                new_s1.append(s1_)
+                new_ner_label.append(ner_label_)
+                s1_input_mask.append(input_mask_)
+                s1_segment_ids.append(segment_ids_)
+
+            feed_dict = {
+                self.s1: utils.pad_sequences(new_s1, padding='post'),
+                self.s1_input_mask: utils.pad_sequences(s1_input_mask, padding='post'),
+                self.s1_segment_ids: utils.pad_sequences(s1_segment_ids, padding='post'),
+                self.ner_label: utils.pad_sequences(new_ner_label, padding='post'),
+            }
+            if mode == 'train': feed_dict['num'] = len(features['s1'])
+            feed_dict[self.dropout_rate] = conf.dropout_rate if mode == 'train' else 0.
+            return feed_dict
+
+        def _create_feed_dict_from_raw(self, batch_s1, batch_ner_label, token2id_dct, mode='infer'):
+            char2id = token2id_dct['char2id']
+            bmeo2id = token2id_dct['bmeo2id']
+
+            feed_s1 = [self.sent2ids(s1, char2id) for s1 in batch_s1]
+            feed_input_mask = []
+            feed_segment_ids = []
+            for i, s1_ in enumerate(feed_s1):
+                feed_s1[i] = [char2id['[CLS]']] + s1_[:bert_max_length - 2] + [char2id['[SEP]']]  # [CLS] + [] + [SEP]
+                feed_input_mask.append([1] * len(feed_s1[i]))
+                feed_segment_ids.append([0] * len(feed_s1[i]))
+
+            feed_dict = {
+                self.s1: utils.pad_sequences(feed_s1, padding='post'),
+                self.s1_input_mask: utils.pad_sequences(feed_input_mask, padding='post'),
+                self.s1_segment_ids: utils.pad_sequences(feed_segment_ids, padding='post'),
+            }
+            feed_dict[self.dropout_rate] = conf.dropout_rate if mode == 'train' else 0.
+
+            if mode == 'infer':
+                return feed_dict
+
+            if mode in ['train', 'dev']:
+                feed_ner_label = [self.bmeo2ids(label, bmeo2id) for label in batch_ner_label]
+                feed_ner_label = [[bmeo2id['O']] + ele[:bert_max_length-2] + [bmeo2id['O']] for ele in feed_ner_label]
+                feed_ner_label = utils.pad_sequences(feed_ner_label, padding='post')
+
+                feed_dict[self.ner_label] = feed_ner_label
+                return feed_dict
+
+            raise ValueError(f'mode type {mode} not support')
+
+        # 根据bert的分词器修改sent2ids的方法
+        def _sent2ids(cls, sent, word2id, max_word_len = None):
+            # sent 已分好词 ' '隔开
+            words = sent.replace(' ', '')  # 去除已有的分词
+            words = bert_tokenizer.tokenize(words)
+
+            token_ids = [word2id.get(word, word2id['<unk>']) for word in words]
+            if max_word_len:
+                token_ids = token_ids[:max_word_len]
+            return token_ids  # [len]
+
+        # 替换实例方法
+        import types
+        self.create_feed_dict_from_features = types.MethodType(_create_feed_dict_from_features, self)
+        self.create_feed_dict_from_raw = types.MethodType(_create_feed_dict_from_raw, self)
+        type(self).sent2ids = types.MethodType(_sent2ids, type(self))
+        print('提醒：由于该模型重写了sent2ids等函数，故生成tfrecord时check的过程中，原始分词后的字符串和转成的id可能表面上不一致，以id为准')
+
+        bert = BERT(bert_model_dir=bert_model_dir,
+                    is_training=True,
+                    input_ids=self.s1,
+                    input_mask=self.s1_input_mask,
+                    segment_ids=self.s1_segment_ids,
+                    )
+
+        s1_mask = tf.cast(tf.sign(self.s1), tf.float32)  # [batch,len] 1 for nonpad - 0 for pad
+        s1_seqlen = tf.cast(tf.reduce_sum(tf.sign(tf.abs(self.s1)), axis=1), tf.int32)  # [batch]
+
+        bert_seq_output = bert.get_sequence_output()
+        bert_seq_output = tf.layers.dropout(bert_seq_output, self.dropout_rate)  # dropout
+
+        # logits
+        cls_logits = tf.layers.dense(bert_seq_output, conf.label_size, activation=None, use_bias=True, name='cls_logits')  # [batch,length,label]
+
+        # crf
+        log_likelihood, transition_params = tf.contrib.crf.crf_log_likelihood(cls_logits, self.ner_label, tf.to_int32(s1_seqlen))
+        crf_loss = tf.reduce_mean(-log_likelihood)
+
+        # loss
+        self.loss = crf_loss
+
+        # crf decode
+        ner_pred, ner_prob = tf.contrib.crf.crf_decode(cls_logits, transition_params, tf.to_int32(s1_seqlen))
+
+        self.ner_prob = tf.identity(ner_prob, name='ner_prob')  # [batch]
+        self.ner_pred = tf.identity(ner_pred, name='ner_pred')  # [batch,len]
+
+        with tf.name_scope('accuracy'):
+            ner_acc = tf.cast(tf.equal(self.ner_pred, self.ner_label), tf.float32) * s1_mask  # [batch,len]
+            ner_acc = tf.reduce_sum(ner_acc, axis=-1)  # [batch]
+            ner_acc = ner_acc / tf.cast(s1_seqlen, tf.float32)  # [batch]
+            self.accuracy = tf.reduce_mean(ner_acc, axis=0)  # scalar
+
+        self.global_step = tf.train.get_or_create_global_step()
+        self.optimizer = tf.train.AdamOptimizer(learning_rate=conf.lr)
+        self.train_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
+
     @classmethod
     def sent2ids(cls, sent, word2id, max_word_len=None):
         # sent 已分好词 ' '隔开
@@ -139,7 +285,6 @@ class Model(object):
         token_ids = [word2id.get(word, word2id['<unk>']) for word in words]
         if max_word_len:
             token_ids = token_ids[:max_word_len]
-        # token_ids = utils.pad_sequences([token_ids], padding='post', maxlen=max_word_len)[0]
         return token_ids  # [len]
 
     @classmethod
@@ -150,7 +295,6 @@ class Model(object):
         token_ids = [bmeo2id.get(label, bmeo2id['<unk>']) for label in labels]
         if max_word_len:
             token_ids = token_ids[:max_word_len]
-        # token_ids = utils.pad_sequences([token_ids], padding='post', maxlen=max_word_len)[0]
         return token_ids  # [len]
 
     def create_feed_dict_from_data(self, data, ids, mode='train'):
@@ -184,11 +328,9 @@ class Model(object):
         bmeo2id = token2id_dct['bmeo2id']
 
         feed_s1 = [self.sent2ids(s1, char2id) for s1 in batch_s1]
-        if len(set([len(e) for e in feed_s1])) != 1:  # 长度不等
-            feed_s1 = utils.pad_sequences(feed_s1, padding='post')
 
         feed_dict = {
-            self.s1: np.array(feed_s1),
+            self.s1: utils.pad_sequences(feed_s1, padding='post'),
         }
         feed_dict[self.dropout_rate] = conf.dropout_rate if mode == 'train' else 0.
 
@@ -196,11 +338,9 @@ class Model(object):
             return feed_dict
 
         if mode in ['train', 'dev']:
+            assert batch_ner_label, 'batch_ner_label should not be None when mode is train or dev'
             feed_ner_label = [self.bmeo2ids(label, bmeo2id) for label in batch_ner_label]
-            if len(set([len(e) for e in feed_ner_label])) != 1:  # 长度不等
-                feed_ner_label = utils.pad_sequences(feed_ner_label, padding='post')
-
-            feed_dict[self.ner_label] = feed_ner_label
+            feed_dict[self.ner_label] = utils.pad_sequences(feed_ner_label, padding='post')
             return feed_dict
 
         raise ValueError(f'mode type {mode} not support')
@@ -256,7 +396,8 @@ class Model(object):
                             'ner_label': bmeo_ids,
                         }
                         yield d
-                    except:
+                    except Exception as e:
+                        print('Exception occur in items_gen()!\n', e)
                         continue
 
         count = items2tfrecord(items_gen(), tfrecord_file)

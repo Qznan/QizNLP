@@ -23,13 +23,14 @@ conf = utils.dict2obj({
 class Model(object):
     def __init__(self, build_graph=True, **kwargs):
         self.conf = conf
+        self.run_model = kwargs.get('run_model', None)  # acquire outside run_model instance
         if build_graph:
             # build placeholder
             self.build_placeholder()
             # build model
             self.model_name = kwargs.get('model_name', 'esim')
             {
-                'esim': self.build_model,
+                'esim': self.build_model1,
                 # add new here
             }[self.model_name]()
             print(f'model_name: {self.model_name} build graph ok!')
@@ -42,7 +43,7 @@ class Model(object):
         self.target = tf.placeholder(tf.int32, [None], name="target")
         self.dropout_rate = tf.placeholder(tf.float32, name="dropout_rate")
 
-    def build_model(self):
+    def build_model1(self):
         # embedding
         # [batch,len,embed]
         s1_embed, _ = embedding(tf.expand_dims(self.s1, -1), conf.vocab_size, conf.embed_size, name='share_embedding', pretrain_embedding=conf.pretrain_emb)
@@ -172,16 +173,11 @@ class Model(object):
         word2id = token2id_dct['word2id']
         
         feed_s1 = [self.sent2ids(s1, word2id) for s1 in batch_s1]
-        if len(set([len(e) for e in feed_s1])) != 1:  # 长度不等
-            feed_s1 = utils.pad_sequences(feed_s1, padding='post')
-
         feed_s2 = [self.sent2ids(s2, word2id) for s2 in batch_s2]
-        if len(set([len(e) for e in feed_s2])) != 1:  # 长度不等
-            feed_s2 = utils.pad_sequences(feed_s2, padding='post')
 
         feed_dict = {
-            self.s1: np.array(feed_s1),
-            self.s2: np.array(feed_s2),
+            self.s1: utils.pad_sequences(feed_s1, padding='post'),
+            self.s2: utils.pad_sequences(feed_s2, padding='post'),
         }
         feed_dict[self.dropout_rate] = conf.dropout_rate if mode == 'train' else 0.
 
@@ -189,6 +185,7 @@ class Model(object):
             return feed_dict
 
         if mode in ['train', 'dev']:
+            assert batch_y, 'batch_y should not be None when mode is train or dev'
             feed_dict[self.target] = batch_y
             return feed_dict
         
@@ -255,7 +252,8 @@ class Model(object):
                             'target': y_id,
                         }
                         yield d
-                    except:
+                    except Exception as e:
+                        print('Exception occur in items_gen()!\n', e)
                         continue
 
         count = items2tfrecord(items_gen(), tfrecord_file)

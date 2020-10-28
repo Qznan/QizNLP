@@ -15,6 +15,7 @@
    * [数据处理相关](#2、数据处理相关)
    * [run和model的conf参数](#3、run和model的conf参数)
    * [使用分布式](#4、使用分布式)
+* [类图](#类图)
 * [TODO](#todo)
 * [参考](#参考)
 * [后记](#后记)
@@ -41,7 +42,7 @@ QizNLP的特点如下：
 项目依赖
 ```
 python>=3.6
-1.8<=tensorflow<=1.12
+1.8<=tensorflow<=1.14
 ```
 已发布pypi包，可直接通过```pip```下载
 ```shell script
@@ -56,22 +57,22 @@ qiznlp_init
 ```bash
 .
 ├── model	# 各个任务的模型代码示例
-│   ├── cls_model.py
-│   ├── mch_model.py
-│   ├── s2l_model.py
-│   ├── s2s_model.py
-│   ├── multi_mch_model.py
-│   └── multi_s2s_model.py
+│   ├── cls_model.py
+│   ├── mch_model.py
+│   ├── s2l_model.py
+│   ├── s2s_model.py
+│   ├── multi_mch_model.py
+│   └── multi_s2s_model.py
 ├── run		# 各个任务的模型训练代码示例
-│   ├── run_cls.py
-│   ├── run_mch.py
-│   ├── run_s2l.py
-│   ├── run_s2s.py
-│   ├── run_multi_mch.py
-│   └── run_multi_s2s.py
+│   ├── run_cls.py
+│   ├── run_mch.py
+│   ├── run_s2l.py
+│   ├── run_s2s.py
+│   ├── run_multi_mch.py
+│   └── run_multi_s2s.py
 ├── deploy	# 模型载入及部署的代码示例
-│   ├── example.py
-│   └── web_API.py
+│   ├── example.py
+│   └── web_API.py
 └── data	# 各个任务的默认数据
     ├── train.toutiao.cls.txt
     ├── valid.toutiao.cls.txt
@@ -85,7 +86,10 @@ qiznlp_init
 ```
 注意：如果不是通过pip安装此项目而是直接从github上克隆项目源码，则进行后续操作前需将包显式加入python路径中：
 ```
-export PYTHONPATH=$PYTHONPATH:<克隆的qiznlp所在目录dir>
+# Linux & Mac
+export PYTHONPATH=$PYTHONPATH:<克隆的qiznlp所在dir>
+# Windows
+set PYTHONPATH=<克隆的qiznlp所在dir>
 ```
 ## 使用示例
 #### 1.快速运行（使用默认数据训练）
@@ -115,20 +119,29 @@ python run_multi_s2s.py
 
 |任务|训练代码|模型代码|支持模型<br>*(默认)|默认数据|备注|来源| 
 |:------:|:---:|:---:|:---|---|:---|---|
-|分类|run_cls.py|model_cls.py|TransEncoder+MeanPooling<br>*TransEncoder+MHAttPooling|train、valid、test.toutiao.cls.txt|头条新闻分类|https://github.com/luopeixiang/textclf|
-|序列标注|run_s2l.py|model_s2l.py|*BiLSTM+CRF<br>IDCNN+CRF|train、dev、test.char.bmes.txt|ResumeNER简历数据|https://github.com/jiesutd/LatticeLSTM|
+|分类|run_cls.py|model_cls.py|TransEncoder+MeanPooling<br>*TransEncoder+MHAttPooling<br>BERT|train、valid、test.toutiao.cls.txt|头条新闻分类|https://github.com/luopeixiang/textclf|
+|序列标注|run_s2l.py|model_s2l.py|*BiLSTM+CRF<br>IDCNN+CRF<br>BERT+CRF|train、dev、test.char.bmes.txt|ResumeNER简历数据|https://github.com/jiesutd/LatticeLSTM|
 |匹配|run_mch.py|model_mch.py|*ESIM|mch_example_data.txt|ChineseSTS相似文本语义|https://github.com/IAdmireu/ChineseSTS|
-|生成|run_s2s.py|model_s2s.py|Seq2Seq+Attn<br>*Transformer|XHJ_5w.txt|小黄鸡闲聊5万|https://github.com/candlewill/Dialog_Corpus|
+|生成|run_s2s.py|model_s2s.py|LSTM_Seq2Seq+Attn<br>*Transformer|XHJ_5w.txt|小黄鸡闲聊5万|https://github.com/candlewill/Dialog_Corpus|
 |<img width=150/>|
 |多轮匹配|run_multi_mch.py|multi_mch_model.py|DAM<br>*MRFN|Douban_Sess662.txt|豆瓣多轮会话600+|https://github.com/MarkWuNLP/MultiTurnResponseSelection
 |多轮生成|run_multi_s2s.py|multi_s2s_model.py|HRED<br>HRAN<br>*ReCoSa|XHJ_5w.txt<br>+Douban_Sess662.txt|小黄鸡闲聊5万<br>豆瓣多轮会话600+|https://github.com/candlewill/Dialog_Corpus<br>https://github.com/MarkWuNLP/MultiTurnResponseSelection
 
 #### 2.使用自有数据
 根据输入数据文本格式修改```run_*.py```中的```preprocess_raw_data()```函数，决定如何读取自有数据。
-目前除```run_s2l.py```中，均已有```preprocess_raw_data()```的函数参考示例，其中默认文本格式如下：
-* ```run_cls.py```：默认输入文本格式的每行为：```句子\t类别```
-* ```run_mch.py```：默认输入文本格式的每行为：```句子1\t句子2```(正样本对，框架自行负采样)
-* ```run_s2s.py```：默认输入文本格式的每行为：```句子1\t句子2```
+各```run_*.py```中，均已有```preprocess_raw_data()```的函数参考示例，其中默认文本格式如下：
+* ```run_cls.py```：默认输入文本格式的每行为：```句子\t类别``` 
+    > 自然语言难处理\t科技类
+* ```run_s2l.py```：默认输入文本格式的每行为：```句子(以空格分好)\t标签(以空格分好)```
+    > 我 是 王 五 ， 没 有 人 比 我 更 懂 N L P 。\tO O B-NAME I-NAME O O O O O O O O B-TECH I-TECH I-TECH O
+* ```run_mch.py```：默认输入文本格式的每行为：```句子1\t句子2```(正样本对，框架自行负采样)  
+    > 自然语言难处理\t自然语言处理难
+* ```run_s2s.py```：默认输入文本格式的每行为：```句子1\t句子2```  
+    > 自然语言难处理\t机器也不学习
+* ```run_multi_mch.py```：默认输入文本格式的每行为：```多轮对话句子1\t多轮对话句子2\t...\t多轮对话句子n```
+    > 自然语言难处理\t机器也不学习\t还说是人工智能\t简直就是人工智障\t大佬所见略同\t握手
+* ```run_multi_s2s.py```：默认输入文本格式的每行为：```多轮对话句子1\t多轮对话句子2\t...\t多轮对话句子n```
+    > 自然语言难处理\t机器也不学习\t还说是人工智能\t简直就是人工智障\t大佬所见略同\t握手
 
 然后在```run_*.py```中指定```train()```的数据处理函数为```preprocess_raw_data```，以```run_cls.py```为例：
 ```python
@@ -137,11 +150,11 @@ rm_cls.train('cls_ckpt_1', '../data/cls_example_data.txt', preprocess_raw_data=p
 ```
 具体更多细节可自行查阅代码，相信你能很快理解并根据自己的需求进行修改以适配自有数据 :)
 
-这里有个彩蛋，第一次运行自有数据会不成功，需要对应修改```model_*.py```中conf与字典大小相关的参数，请按报错提示进行修改就ok。详情请参考下文：字典生成中的[提醒](#1、生成词表字典)
+这里有个彩蛋：第一次运行自有数据会不成功，需要对应修改```model_*.py```中conf与字典大小相关的参数，详情请参考下文：字典生成中的[提醒](#1生成词表字典)
 ### 框架设计思路
 ——只有大体了解了框架设计才能更自由地进行适配 :)
 
-一个NLP任务可以分为：数据选取及处理、模型输入输出设计、模型结构设计、训练及评估、推断或部署。
+一个NLP任务可以分为：数据选取及处理、模型输入输出设计、模型结构设计、训练及评估、推断、部署。
 由此抽象出一些代码模块：
 * run模块负责维护以下实例对象及方法：
 	* TF中的sess/graph/config/saver
@@ -163,7 +176,7 @@ rm_cls.train('cls_ckpt_1', '../data/cls_example_data.txt', preprocess_raw_data=p
 model之间的主要区别是维护了自己特有的输入输出（即tf.placeholder的设计），故有以下实践建议：
 
 **何时不需要新建model？**  
-原则上只要输入输出不变，只有模型结构改变，则直接在原有model中增加代码并在初始化时选择新的结构。  
+原则上只要输入输出不变，只有模型结构改变，则直接在原有model中增加新模型代码并在初始化时选择新的模型结构。  
 这种情况经常出现在针对某个任务的结构微调及试错过程中。
 
 **何时需要新建model？**  
@@ -180,15 +193,18 @@ model之间的主要区别是维护了自己特有的输入输出（即tf.placeh
 * 生成向量方式会被应用于run的数据处理（生成tfrecord或原生py的pkl数据），以及对原始数据进行推断时的预处理
 * 生成向量后对齐到placeholder的方式则会被应用在run的训练及推断。
 
+**使用bert类模型时输入改变了但不必新增model与run**  
+bert类模型的输入有额外的\[CLS]\\\[SEP]等特殊符号，但本质上是模型层面的输入适配而不是任务数据层面的改变，故直接在原有model中重写与输入有关的函数，包装一层处理成bert输入的方法即可。
+
 ### 公共模块
 qiznlp包的公共模块文件如下：  
 （因为是基本不需更改的基础模块，故没有在```qiznlp_init```命令初始化随其他文件一起复制到当前目录， 通过```qiznlp.common.*```调用）
 ```bash
 └── common
-    ├── modules  # 封装少量常用模型及各种TF的神经网络常用操作函数。
-    ├── tfrecord_utils.py  # 封装TFRecord数据保存及读取操作。
-    ├── train_helper.py  # 封装train过程中对数据的处理及其它相关方法。
-    └── utils.py  # 基础类，个人对python中一些数据IO的简单封装，框架的许多IO操作调用了里面封装的方法，建议详细看看。
+    ├── modules  # 封装少量常用模型及各种TF的神经网络常用操作函数。
+    ├── tfrecord_utils.py  # 封装TFRecord数据保存及读取操作。
+    ├── train_helper.py  # 封装train过程中对数据的处理及其它相关方法。
+    └── utils.py  # 基础类，个人对python中一些数据IO的简单封装，框架的许多IO操作调用了里面封装的方法，建议详细看看。
 ```
 
 ### 修改适配需关注点
@@ -202,17 +218,31 @@ token2id_dct = {
 ```
 如果传入的字典文件为空，则需要在run的数据处理函数中进行字典的构建，并保存到文件，方便下次直接读取
 ```python
-# 循环中不断调用
+# 在迭代处理数据时循环调用
 token2id_dct['word2id'].to_count(cuted_sentent.split(' '))  # 迭代统计token信息，句子已分词，空格分隔
-
-# 结束循环后构造字典
-# 参数包括 预留token、最小词频及最大词表大小
+# 结束迭代后构造字典
+# 参数包括 预留词、最小词频、最大词表大小
 token2id_dct['word2id'].rebuild_by_counter(restrict=['<pad>', '<unk>'], min_freq=1, max_vocab_size=20000)
 token2id_dct['word2id'].save(f'{curr_dir}/../data/toutiaoword2id.dct')  # 保存到文件
 ```
-提醒：在对自有数据进行训练时，由于模型的初始化比训练数据的处理要早，所以model中conf的vocab size/label size等相关参数只能先随便指定。同时等训练数据分词、构造字典完毕后，才能确定这些参数。  
-目前解决方式是运行两次run：第一次运行构造字典完毕后，会检查模型vocab size等相关参数是否一致，不一致报错并返回信息。之后手工修正model中conf的相关参数后，再次运行。  
-（当然也可以使用自己预定义的字典文件，然后在model中conf设置好正确的相关参数后直接运行run）
+注意1）在某个任务切换跑自有数据与公共数据集时，记得切换token2id_dct的字典文件名，如下：
+```python
+self.token2id_dct = {
+    # 'word2id': utils.Any2Id.from_file(f'{curr_dir}/../data/cls_word2id.dct', use_line_no=True),  # 自有数据
+    # 'label2id': utils.Any2Id.from_file(f'{curr_dir}/../data/cls_label2id.dct', use_line_no=True),  # 自有数据
+    'word2id': utils.Any2Id.from_file(f'{curr_dir}/../data/toutiao_cls_word2id.dct', use_line_no=True),  # toutiao新闻
+    'label2id': utils.Any2Id.from_file(f'{curr_dir}/../data/toutiao_cls_label2id.dct', use_line_no=True),  # toutiao新闻
+    }
+```
+注意2）对自有数据进行训练时，由于模型的初始化比训练数据的处理更早，所以model源码中conf的相关参数（如：vocab size/label size等）只能先随意指定。之后等对训练数据的处理（分词、构造字典）完毕后才确认这些参数。  
+目前解决方式是运行两次run：第一次运行构造字典完毕后，会检查字典大小与model源码的vocab size等相关参数是否一致，不一致则自动更新model源码，请根据提示再次运行即可。如下：
+```bash
+some param should be update:
+vocab_size => param: 40000 != dict: 4500
+update vocab_size success
+script will exit! please run the script again! e.g. python run_***.py
+```
+（当然也可以使用自己预定义的字典文件，然后在model源码conf中设置正确的相关参数后直接运行run）
 
 ##### 2、数据处理相关
 ```preprocess_raw_data```返回训练、验证、测试数据的元组：
@@ -242,16 +272,16 @@ model中conf示例如下：
 ```
 # model_cls.py
 conf = utils.dict2obj({
-    "vocab_size": 14180,  # 词表大小，也就是上文所述构建字典后需注意对齐的参数
+    'vocab_size'"': 14180,  # 词表大小，也就是上文所述构建字典后需注意对齐的参数
     'label_size': 16,  # 类别数量，需注意对齐
-    "embed_size": 300,
+    'embed_size': 300,
     'hidden_size': 300,
     'num_heads': 6,
     'num_encoder_layers': 6,
     'dropout_rate': 0.2,
     'lr': 1e-3,
     'pretrain_emb': None,  # 不使用预训练词向量
-    # 'pretrain_emb': np.load(f'{curr_dir}/pretrain_word_emb300.npy'),  # 使用预训练词向量(np格式)
+    # 'pretrain_emb': np.load(f'{curr_dir}/pretrain_word_emb300.npy'),  # 使用预训练词向量(np格式)[vocab_size,embed_size]
 })
 ```
 具体参数可根据个人任务情况进行增删改。
@@ -259,41 +289,45 @@ conf = utils.dict2obj({
 框架提供的分布式功能基于horovod（一种同步数据并行策略），即将batch数据分为多个小batch，分配到多机或多卡来训练。
 
 前提：```pip install horovod```  
-限制：只能用TFRecord数据格式（因为需利用其提供的分片shard功能）。且生成TFRecord的过程不好用多个worker,故实践建议分两次运行，一次正常运行生成数据及字典，再次运行才进行分布式训练  
-操作步骤：需要先按照正常方式运行一遍，以```run_cls.py```为例，终端运行：
+限制：只能用TFRecord数据格式（因为需利用其提供的分片shard功能）。但生成TFRecord的过程不方便多个worker并行,故实践建议分两次运行，第一次采用非分布式正常运行生成数据、字典并能跑通训练，第二次运行才进行分布式训练  
+操作步骤：先按照正常方式运行一遍，以```run_cls.py```为例，终端运行：
 ```
 python run_cls.py
 ```
 其中run的初始化为：
 ```
-rm_cls = Run_Model_Cls('trans_mhattnpool')  # 默认初始化方式
+rm_cls = Run_Model_Cls('trans_mhattnpool')
+rm_cls.train('cls_ckpt_taskname', 'raw_data_file', preprocess_raw_data=preprocess_raw_data_fn, batch_size=batch_size)  # train
 ```
-等通过终端日志确定已生成完TFRecord数据后，```ctrl+c```退出  
+等通过终端日志确定已生成完TFRecord数据后，并且字典相关大小也和model对齐之后，```ctrl+c```退出  
 继而修改初始化参数```use_hvd=True```：
 ```
 rm_cls = Run_Model_Cls('trans_mhattnpool', use_hvd=True)
+rm_cls.train('cls_ckpt_taskname', 'raw_data_file', preprocess_raw_data=preprocess_raw_data_fn, batch_size=batch_size)  # train
 ```
 并在终端按照horovod要求的格式运行命令：
 ```
 horovodrun -np 2 -H localhost:2 python run_cls.py
 # -np 2 代表总的worker数量为2
 # -H localhost:2 代表使用本机的2块GPU
-# 注意此时需要在代码中预先设置好可见的GPU，如：os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
+# 注意此时需要在代码中事先设置好正确数量的可见GPU，如：os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
 ```
 提醒：分布式训练中```train()```指定的```batch_size```参数即为有效（真实）batch size，内部会将batch切分为对应每个机或卡的小batch。故分布式训练实践中可在```train()```中直接指定大一点的```batch_size```。
-
-
+### 类图
+附上主要的类设计图说明
+![Image text](main_class_diagram.png)
 ## TODO
 * 完善对model和run模块的单独说明
 * 完善对公共module模块相关说明
 * 完善对deploy模块相关说明
-* 继续增加各任务默认模型
+* 继续增加各任务默认模型(尤其预训练模型)，各任务数据集
 * 继续完善框架，保持灵活性的同时尽量增加易用性
 * README.md英文化
-* 增加更多其他任务（如多轮检索和生成、少样本学习等）
+* 增加更多其他任务（如~~多轮检索和生成~~、MRC、few-shot-learning等）
 
 ## 参考
-[tensor2tensor](https://github.com/tensorflow/tensor2tensor)
+* [tensor2tensor](https://github.com/tensorflow/tensor2tensor)
+* [bert](https://github.com/google-research/bert)
 
 ## License
 Mozilla Public License 2.0 (MPL 2.0)
@@ -304,5 +338,5 @@ Mozilla Public License 2.0 (MPL 2.0)
 后续增加了自己写的S2S的beam_search代码（支持一些多样性方法），以及TF模型的导出部署代码。开始有点框架的味道。  
 之后在解决各种任务类型时，不断重构，追求较灵活的设计方案，终得到现版本。
   
-深知目前还有许多可改进的地方，希望大家能一起加入和改进！
+深知目前还有许多可改进的地方，欢迎和希望感兴趣的人能一起加入和改进！
 

@@ -60,9 +60,9 @@ class Run_Model_Mch(Run_Model_Base):
             self.model = MCH_Model.from_pbmodel(pbmodel_dir, self.sess)
         else:
             with self.graph.as_default():
-                self.model = MCH_Model(model_name=self.model_name)
+                self.model = MCH_Model(model_name=self.model_name, run_model=self)
                 if self.use_hvd:
-                    self.model.optimizer._lr = self.model.optimizer._lr * hvd.size()  # 分布式训练大batch增大学习率
+                    self.model.optimizer._lr = self.model.optimizer._lr * self.hvd_size  # 分布式训练大batch增大学习率
                     self.model.hvd_optimizer = hvd.DistributedOptimizer(self.model.optimizer)
                     self.model.train_op = self.model.hvd_optimizer.minimize(self.model.loss, global_step=self.model.global_step)
                 self.sess.run(tf.global_variables_initializer())
@@ -89,12 +89,13 @@ class Run_Model_Mch(Run_Model_Base):
                                                feed_dict=feed_dict)
         return loss, accuracy, y_prob
 
-    def train(self, ckpt_dir, raw_data_file, preprocess_raw_data, batch_size=100):
+    def train(self, ckpt_dir, raw_data_file, preprocess_raw_data, batch_size = 100, save_data_prefix = None):
+        save_data_prefix = os.path.basename(ckpt_dir) if save_data_prefix is None else save_data_prefix
         train_epo_steps, dev_epo_steps, test_epo_steps, gen_feed_dict = self.prepare_data(conf.data_type,
                                                                                           raw_data_file,
                                                                                           preprocess_raw_data,
                                                                                           batch_size,
-                                                                                          save_data_prefix=os.path.basename(ckpt_dir),
+                                                                                          save_data_prefix=save_data_prefix,
                                                                                           )
         self.is_master = True
         if hasattr(self, 'hvd_rank') and self.hvd_rank != 0:  # 分布式训练且非master
@@ -193,6 +194,7 @@ class Run_Model_Mch(Run_Model_Base):
                 self.save(ckpt_dir=ckpt_dir, epo=epo, info_str=info_str)
 
             utils.obj2json(train_info, f'{ckpt_dir}/metrics.json')
+            print('=' * 40, end='\n')
             if conf.early_stop_patience:
                 if self.stop_training(conf.early_stop_patience, train_info, 'dev_acc'):
                     print('early stop training!')
@@ -219,6 +221,8 @@ class Run_Model_Mch(Run_Model_Base):
 
 def preprocess_raw_data(file, tokenize, token2id_dct, **kwargs):
     """
+    # 处理自有数据函数模板
+    # file文件数据格式: 句子1\t句子2 (正样本对，框架自行负采样)
     # [filter] 过滤
     # [segment] 分词
     # [build vocab] 构造词典
@@ -242,6 +246,9 @@ def preprocess_raw_data(file, tokenize, token2id_dct, **kwargs):
         # 读取分词好的数据
         items = utils.file2items(seg_file)
 
+    # 划分 不分测试集
+    train_items, dev_items = utils.split_file(items, ratio='19:1', shuffle=True, seed=1234)
+
     # 构造词典(option)
     need_to_rebuild = []
     for token2id_name in token2id_dct:
@@ -251,18 +258,17 @@ def preprocess_raw_data(file, tokenize, token2id_dct, **kwargs):
 
     if need_to_rebuild:
         print(f'生成缺失词表文件...{need_to_rebuild}')
-        for item in items:
-            if 'word2id' in need_to_rebuild:
-                token2id_dct['word2id'].to_count(item[0].split(' '))
-                token2id_dct['word2id'].to_count(item[1].split(' '))
+        for items in [train_items, dev_items]:  # 字典只统计train和dev
+            for item in items:
+                if 'word2id' in need_to_rebuild:
+                    token2id_dct['word2id'].to_count(item[0].split(' '))
+                    token2id_dct['word2id'].to_count(item[1].split(' '))
         if 'word2id' in need_to_rebuild:
             token2id_dct['word2id'].rebuild_by_counter(restrict=['<pad>', '<unk>', '<eos>'], min_freq=5, max_vocab_size=30000)
             token2id_dct['word2id'].save(f'{curr_dir}/../data/mch_word2id.dct')
     else:
         print('使用已有词表文件...')
 
-    # 切分数据集
-    train_items, dev_items = utils.split_file(items, ratio='19:1', shuffle=True, seed=1234)
     # 负采样
     train_items = train_helper.gen_pos_neg_sample(train_items, sample_idx=1, num_neg_exm=4)
     dev_items = train_helper.gen_pos_neg_sample(dev_items, sample_idx=1, num_neg_exm=4)

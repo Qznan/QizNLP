@@ -1,10 +1,5 @@
 #!/usr/bin/env python
 # coding=utf-8
-"""
-@Author : yonas
-@Time   : 2020/3/15 下午10:55
-@File   : web_API.py
-"""
 import os, time, json, sys
 from run.run_cls import Run_Model_Cls
 import tornado.ioloop
@@ -12,10 +7,10 @@ import tornado.web
 from urllib import parse  # parse.quote 文本->url编码 ' '->'%20'  parse.unquote url编码->文本 '%20'->' '
 
 curr_dir = os.path.dirname(os.path.realpath(__file__))
-os.environ['CUDA_VISIBLE_DEVICES'] = '5'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # 使用CPU设为'-1'
 
 rm_cls = Run_Model_Cls('trans_mhattnpool')
-rm_cls.restore('trans_ckpt_10')  # restore to infer
+rm_cls.restore('cls_ckpt_toutiao1')  # restore for infer
 
 
 def web_predict(sent, need_cut=True):
@@ -57,7 +52,7 @@ class MainHandler(tornado.web.RequestHandler):
 
 def make_app():
     return tornado.web.Application([
-        (r"/QZ/predict", MainHandler),
+        (r"/QizNLP/predict", MainHandler),
     ])
 
 
@@ -67,4 +62,5 @@ if __name__ == '__main__':
     app.listen(DEFAULT_PORT)
     tornado.ioloop.IOLoop.current().start()
 
-    # curl localhost:8090/QZ/predict?sent=你好
+    # test with follow:
+    # curl localhost:8090/QizNLP/predict?sent=去日本的邮轮游需要5万的资产证明吗？

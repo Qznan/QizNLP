@@ -40,6 +40,8 @@ class Run_Model_S2L(Run_Model_Base):
             self.tokenize = tokenize
         self.cut = lambda t: ' '.join(self.tokenize(t))
         self.token2id_dct = {
+            # 'char2id': utils.Any2Id.from_file(f'{curr_dir}/../data/s2l_char2id.dct', use_line_no=True),  # 自有数据
+            # 'bmeo2id': utils.Any2Id.from_file(f'{curr_dir}/../data/s2l_bmeo2id.dct', use_line_no=True),  # 自有数据
             'char2id': utils.Any2Id.from_file(f'{curr_dir}/../data/rner_s2l_char2id.dct', use_line_no=True),  # ResumeNER
             'bmeo2id': utils.Any2Id.from_file(f'{curr_dir}/../data/rner_s2l_bmeo2id.dct', use_line_no=True),  # ResumeNER
         }
@@ -59,9 +61,9 @@ class Run_Model_S2L(Run_Model_Base):
             self.model = S2L_Model.from_pbmodel(pbmodel_dir, self.sess)
         else:
             with self.graph.as_default():
-                self.model = S2L_Model(model_name=self.model_name)
+                self.model = S2L_Model(model_name=self.model_name, run_model=self)
                 if self.use_hvd:
-                    self.model.optimizer._lr = self.model.optimizer._lr * hvd.size()  # 分布式训练大batch增大学习率
+                    self.model.optimizer._lr = self.model.optimizer._lr * self.hvd_size  # 分布式训练大batch增大学习率
                     self.model.hvd_optimizer = hvd.DistributedOptimizer(self.model.optimizer)
                     self.model.train_op = self.model.hvd_optimizer.minimize(self.model.loss, global_step=self.model.global_step)
                 self.sess.run(tf.global_variables_initializer())
@@ -87,13 +89,14 @@ class Run_Model_S2L(Run_Model_Base):
                                        feed_dict=feed_dict)
         return loss, accuracy
 
-    def train(self, ckpt_dir, raw_data_file, preprocess_raw_data, batch_size=100):
+    def train(self, ckpt_dir, raw_data_file, preprocess_raw_data, batch_size=100, save_data_prefix=None):
+        save_data_prefix = os.path.basename(ckpt_dir) if save_data_prefix is None else save_data_prefix
         train_epo_steps, dev_epo_steps, test_epo_steps, gen_feed_dict = self.prepare_data(conf.data_type,
                                                                                           raw_data_file,
                                                                                           preprocess_raw_data,
                                                                                           batch_size,
-                                                                                          save_data_prefix=os.path.basename(ckpt_dir),
-                                                                                          update_txt=True,
+                                                                                          save_data_prefix=save_data_prefix,
+                                                                                          update_txt=False,
                                                                                           )
         self.is_master = True
         if hasattr(self, 'hvd_rank') and self.hvd_rank != 0:  # 分布式训练且非master
@@ -178,6 +181,7 @@ class Run_Model_S2L(Run_Model_Base):
                 self.save(ckpt_dir=ckpt_dir, epo=epo, info_str=info_str)
 
             utils.obj2json(train_info, f'{ckpt_dir}/metrics.json')
+            print('=' * 40, end='\n')
             if conf.early_stop_patience:
                 if self.stop_training(conf.early_stop_patience, train_info, 'dev_acc'):
                     print('early stop training!')
@@ -205,6 +209,51 @@ class Run_Model_S2L(Run_Model_Base):
         return pred_lst
 
 
+def preprocess_raw_data(file, tokenize, token2id_dct, **kwargs):
+    """
+    # 处理自有数据函数模板
+    # file文件数据格式: 句子(以空格分好)\t标签(以空格分好)
+    # [filter] 过滤
+    # [segment] 分词 ner一般仅分字，用空格隔开，不需分词步骤
+    # [build vocab] 构造词典
+    # [split] train-dev-test
+    """
+    items = utils.file2items(file)
+    # 过滤
+    # filter here
+
+    print('过滤后数据量', len(items))
+
+    # 划分
+    train_items, dev_items, test_items = utils.split_file(items, ratio='18:1:1', shuffle=True, seed=1234)
+
+    # 构造词典(option)
+    need_to_rebuild = []
+    for token2id_name in token2id_dct:
+        if not token2id_dct[token2id_name]:
+            print(f'字典{token2id_name} 载入不成功, 将生成并保存')
+            need_to_rebuild.append(token2id_name)
+
+    if need_to_rebuild:
+        print(f'生成缺失词表文件...{need_to_rebuild}')
+        for items in [train_items, dev_items]:  # 字典只统计train和dev
+            for item in items:
+                if 'char2id' in need_to_rebuild:
+                    token2id_dct['char2id'].to_count(item[0].split(' '))
+                if 'bmeo2id' in need_to_rebuild:
+                    token2id_dct['bmeo2id'].to_count(item[1].split(' '))
+        if 'char2id' in need_to_rebuild:
+            token2id_dct['char2id'].rebuild_by_counter(restrict=['<pad>', '<unk>'], min_freq=1, max_vocab_size=5000)
+            token2id_dct['char2id'].save(f'{curr_dir}/../data/s2l_char2id.dct')
+        if 'bmeo2id' in need_to_rebuild:
+            token2id_dct['bmeo2id'].rebuild_by_counter(restrict=['<pad>', '<unk>'])
+            token2id_dct['bmeo2id'].save(f'{curr_dir}/../data/s2l_bmeo2id.dct')
+    else:
+        print('使用已有词表文件...')
+
+    return train_items, dev_items, test_items
+
+
 def preprocess_common_dataset_ResumeNER(file, tokenize, token2id_dct, **kwargs):
     train_file = f'{curr_dir}/../data/train.char.bmes.txt'
     dev_file = f'{curr_dir}/../data/dev.char.bmes.txt'
@@ -218,7 +267,7 @@ def preprocess_common_dataset_ResumeNER(file, tokenize, token2id_dct, **kwargs):
         curr_bmeo = []
 
         for item in items:
-            if len(item) == 1:  # 分隔标志
+            if len(item) == 1:  # 分隔标志 ['']
                 if curr_sent and curr_bmeo:
                     exm_lst.append([' '.join(curr_sent), ' '.join(curr_bmeo)])
                     curr_sent, curr_bmeo = [], []
@@ -264,12 +313,14 @@ if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # 使用CPU设为'-1'
 
     rm_s2l = Run_Model_S2L('birnn')  # use BiLSTM
+    # rm_s2l = Run_Model_S2L('idcnn')  # use IDCNN
+    # rm_s2l = Run_Model_S2L('bert_crf')  # use bert+crf
 
     # 训练自有数据
     # rm_s2l.train('s2l_ckpt_1', '../data/s2l_example_data.txt', preprocess_raw_data=preprocess_raw_data, batch_size=512)  # train
 
     # 训练ResumeNER语料
-    rm_s2l.train('s2l_ckpt_RNER1', '', preprocess_raw_data=preprocess_common_dataset_ResumeNER, batch_size=256)  # train
+    rm_s2l.train('s2l_ckpt_RNER1', '', preprocess_raw_data=preprocess_common_dataset_ResumeNER, batch_size=512)  # train
 
     # demo命名实体识别ResumeNER
     rm_s2l.restore('s2l_ckpt_RNER1')  # for infer

@@ -29,17 +29,19 @@ conf = utils.dict2obj({
 class Model(object):
     def __init__(self, build_graph=True, **kwargs):
         self.conf = conf
+        self.run_model = kwargs.get('run_model', None)  # acquire outside run_model instance
         if build_graph:
             # build placeholder
             self.build_placeholder()
             # build model
             self.model_name = kwargs.get('model_name', 'MRFN_1')
             {
+                # Multi-Turn Response Selection for Chatbots with Deep Attention Matching Network https://github.com/julianser/hed-dlg
                 'DAM': self.build_model1,  # https://www.aclweb.org/anthology/P18-1103/
-                # Multi-Turn Response Selection for Chatbots with Deep Attention Matching Network https://github.com/julianser/hed-dlg 
-                'MRFN': self.build_model2,  # https://dl.acm.org/doi/10.1145/3289600.3290985
                 # Multi-Representation Fusion Network for Multi-Turn Response Selection in Retrieval-Based Chatbots https://github.com/chongyangtao/MRFN
-                'MRFN_1': self.build_model3,  # personal modify: use word_char fuse as base embedding, but seem not convergent
+                'MRFN': self.build_model2,  # https://dl.acm.org/doi/10.1145/3289600.3290985
+                # personal modify: use word_char fuse as base embedding, but seem not convergent
+                'MRFN_1': self.build_model3,
                 # add new here
             }[self.model_name]()
             print(f'model_name: {self.model_name} build graph ok!')
@@ -886,10 +888,6 @@ class Model(object):
             feed_multi_s1.append(multi_token_ids)
             feed_char_multi_s1.append(multi_char_token_ids)
 
-        # pad len
-        feed_multi_s1 = utils.pad_sequences(feed_multi_s1, padding='post')
-        feed_char_multi_s1 = utils.pad_sequences(feed_char_multi_s1, padding='post')
-
         feed_s2 = []
         feed_char_s2 = []
         for s2 in batch_s2:
@@ -897,15 +895,11 @@ class Model(object):
             feed_s2.append(token_ids)
             feed_char_s2.append(char_token_ids)
 
-        # pad len
-        feed_s2 = utils.pad_sequences(feed_s2, padding='post')
-        feed_char_s2 = utils.pad_sequences(feed_char_s2, padding='post')
-
         feed_dict = {
-            self.multi_s1: feed_multi_s1,
-            self.s2: feed_s2,
-            self.char_multi_s1: feed_char_multi_s1,
-            self.char_s2: feed_char_s2,
+            self.multi_s1: utils.pad_sequences(feed_multi_s1, padding='post'),
+            self.char_multi_s1: utils.pad_sequences(feed_char_multi_s1, padding='post'),
+            self.s2: utils.pad_sequences(feed_s2, padding='post'),
+            self.char_s2: utils.pad_sequences(feed_char_s2, padding='post'),
         }
 
         feed_dict[self.dropout_rate] = conf.dropout_rate if mode == 'train' else 0.
@@ -913,6 +907,7 @@ class Model(object):
             return feed_dict
 
         if mode in ['train', 'dev']:
+            assert batch_target, 'batch_target should not be None when mode is train or dev'
             feed_dict[self.target] = batch_target
             return feed_dict
 
@@ -991,8 +986,8 @@ class Model(object):
                             'char_s2': char_s2_ids,
                         }
                         yield d
-                    except:
-                        raise
+                    except Exception as e:
+                        print('Exception occur in items_gen()!\n', e)
                         continue
 
         count = items2tfrecord(items_gen(), tfrecord_file)

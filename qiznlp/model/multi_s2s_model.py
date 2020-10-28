@@ -32,6 +32,7 @@ conf = utils.dict2obj({
 class Model(object):
     def __init__(self, build_graph=True, **kwargs):
         self.conf = conf
+        self.run_model = kwargs.get('run_model', None)  # acquire outside run_model instance
         if build_graph:
             # build placeholder
             self.build_placeholder()
@@ -626,20 +627,18 @@ class Model(object):
         word2id = token2id_dct['word2id']
 
         feed_multi_s1 = [self.multi_sent2ids(multi_s1.split('$$$'), word2id) for multi_s1 in batch_multi_s1]
-        feed_multi_s1 = utils.pad_sequences(feed_multi_s1, padding='post')
 
         feed_dict = {
-            self.multi_s1: np.array(feed_multi_s1),
+            self.multi_s1: utils.pad_sequences(feed_multi_s1, padding='post'),
         }
         feed_dict[self.dropout_rate] = conf.dropout_rate if mode == 'train' else 0.
         if mode == 'infer':
             return feed_dict
 
         if mode in ['train', 'dev']:
+            assert batch_s2, 'batch_s2 should not be None when mode is train or dev'
             feed_s2 = [self.sent2ids(s2, word2id) for s2 in batch_s2]
-            if len(set([len(e) for e in feed_s2])) != 1:  # 长度不等
-                feed_s2 = utils.pad_sequences(feed_s2, padding='post')
-            feed_dict[self.s2] = np.array(feed_s2)
+            feed_dict[self.s2] = utils.pad_sequences(feed_s2, padding='post')
             return feed_dict
 
         raise ValueError(f'mode type {mode} not support')
@@ -696,7 +695,8 @@ class Model(object):
                             's2': s2_ids,
                         }
                         yield d
-                    except:
+                    except Exception as e:
+                        print('Exception occur in items_gen()!\n', e)
                         continue
 
         count = items2tfrecord(items_gen(), tfrecord_file)
