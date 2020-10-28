@@ -590,7 +590,7 @@ def pad_sequences(sequences, maxlen=None, dtype='int32', padding='pre', truncati
     return x
 
 
-def get_file_logger(logger_name, log_file='./zyn.log', level='DEBUG'):
+def get_file_logger(logger_name, log_file='./qiznlp.log', level='DEBUG'):
     level = {
         'ERROR': logging.ERROR,
         'INFO': logging.INFO,
