@@ -68,7 +68,7 @@ class Run_Model_Base():
                 ckpt_path + '.meta',
                 ckpt_path + '.data-00000-of-00001']]
             if all(res):
-                print(f'delete {ckpt_path} success!')
+                print(f'------ delete ckpt ok! {ckpt_path}')
 
     def prepare_data(self, data_type, raw_data_file,
                      preprocess_raw_data, batch_size,
@@ -91,17 +91,18 @@ class Run_Model_Base():
                 dev_dataset, dev_data_size = self.model.load_tfrecord(dev_tfrecord_file, batch_size=batch_size)
                 test_dataset, test_data_size = self.model.load_tfrecord(test_tfrecord_file, batch_size=batch_size)
 
+                # 获得迭代的tfrecord example Tensor
                 train_features = train_dataset.make_one_shot_iterator().get_next() if train_dataset else None
                 dev_features = dev_dataset.make_one_shot_iterator().get_next() if dev_dataset else None
                 test_features = test_dataset.make_one_shot_iterator().get_next() if test_dataset else None
 
             def gen_feed_dict(i, epo, mode='train'):
-                nonlocal train_features, dev_features
+                nonlocal train_features, dev_features, test_features
                 if mode == 'train':
                     assert train_features
                     features = self.sess.run(train_features)
                     if i == 0 and epo == 1:
-                        print('inspect tfrecord features:')
+                        print('inspect tfrecord features: (show first two element)')
                         for k, v in features.items():
                             print(f'{k}: {v.shape}{v.tolist()[:2]}')
                     return self.model.create_feed_dict_from_features(features, 'train')
@@ -174,11 +175,13 @@ class Run_Model_Base():
 
         train_epo_steps, dev_epo_steps, test_epo_steps = (None,) * 3
         if train_data_size:
-            train_epo_steps = int(np.ceil(train_data_size / batch_size))
+            train_epo_steps = (train_data_size - 1) // batch_size + 1
         if dev_data_size:
-            dev_epo_steps = int(np.ceil(dev_data_size / batch_size))
+            dev_epo_steps = (dev_data_size - 1) // batch_size + 1
         if test_data_size:
-            test_epo_steps = int(np.ceil(test_data_size / batch_size))
+            test_epo_steps = (test_data_size - 1) // batch_size + 1
+
+        print('\nTraining Data INFO')
         print('batch_size:', batch_size)
         print('train_data_size:', train_data_size)
         print('train_epo_steps:', train_epo_steps)
@@ -186,6 +189,7 @@ class Run_Model_Base():
         print('dev_epo_steps:', dev_epo_steps)
         print('test_data_size:', test_data_size)
         print('test_epo_steps:', test_epo_steps)
+        print('')
 
         return train_epo_steps, dev_epo_steps, test_epo_steps, gen_feed_dict
 
@@ -278,7 +282,7 @@ def check_and_update_param_of_model_pyfile(param_dict, model_inst):
         for param_name, check_success in param_check.items():
             if not check_success:
                 param_value, dict_value = param_dict[param_name]
-                print(f'{param_name} | param: {param_value} != dict: {dict_value}')
+                print(f'{param_name} => param: {param_value} != dict: {dict_value}')
                 change_param_of_pyfile(pyfile, dict_value, param=param_name)
                 print(f'update {param_name} success')
         print('script will exit! please run the script again! e.g. python run_***.py')
