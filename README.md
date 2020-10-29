@@ -155,6 +155,11 @@ python run_multi_s2s.py
 ```python
 # 参数分别为：模型ckpt保存路径、自有数据文件路径、数据处理函数、训练batch size
 rm_cls.train('cls_ckpt_1', '../data/cls_example_data.txt', preprocess_raw_data=preprocess_raw_data, batch_size=512)
+
+# 注意：如果数据集不变的情况修改了模型想继续实验(这是调模型的大部分情况吧),在设置ckpt保存路径为'cls_ckpt_2'后，可设置参数
+# save_data_prefix='cls_ckpt_1'。表示使用前一次实验处理的已有数据，以节省时间。如下：
+# 修改了模型后的再次实验：
+rm_cls.train('cls_ckpt_2', '../data/cls_example_data.txt', preprocess_raw_data=preprocess_raw_data, batch_size=512, save_data_prefix='cls_ckpt_1')
 ```
 具体更多细节可自行查阅代码，相信你能很快理解并根据自己的需求进行修改以适配自有数据 :)
 
@@ -166,7 +171,7 @@ rm_cls.train('cls_ckpt_1', '../data/cls_example_data.txt', preprocess_raw_data=p
 ```bash
 common/modules/bert/chinese_L-12_H-768_A-12
                         ├── bert_model.ckpt.data-00000-of-00001  # 自行下载
-                        ├── bert_model.ckpt.data-00000-of-00001  # 自行下载
+                        ├── bert_model.ckpt.index # 自行下载
                         ├── bert_model.ckpt.meta  # 自行下载
                         ├── bert_config.json  # 框架已提供
                         └── vocab.txt  # 框架已提供
