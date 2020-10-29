@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='QizNLP',
-    version='0.1.2',
+    version='0.1.3',
     author='Qznan',
     author_email='summerzynqz@gmail.com',
     description='Quick run NLP in many task',
@@ -16,10 +16,15 @@ setup(
     license='MPLv2.0',
     url='https://github.com/Qznan/QizNLP',
     packages=find_packages(),
-    package_data={'qiznlp': ['data/*.txt'], },
+    package_data={'qiznlp':
+                      ['data/*.txt',
+                       'common/modules/bert/chinese_L-12_H-768_A-12/*.json',
+                       'common/modules/bert/chinese_L-12_H-768_A-12/*.txt',
+                       ],
+                  },
     install_requires=[
         'jieba',
-        'tensorflow>=1.8, <=1.12'
+        'tensorflow>=1.8, <=1.14'
     ],
     python_requires='>=3.6',
     entry_points={
