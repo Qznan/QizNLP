@@ -2,12 +2,16 @@
 ![](https://img.shields.io/pypi/pyversions/QizNLP?logo=pypi) 
 ![](https://img.shields.io/pypi/l/QizNLP?color=green&logo=pypi)
 
+**Demo** (cpu 训练比较慢)
+![run_demo](run_demo.gif)
+
 **目录**
 * [QizNLP简介](#QizNLP简介)
 * [安装流程](#安装流程)
 * [使用示例](#使用示例)
    * [快速运行（使用默认数据训练）](#1.快速运行（使用默认数据训练）)
    * [使用自有数据](#2.使用自有数据)
+   * [加载预训练模型](#3.加载预训练模型)
 * [框架设计思路](#框架设计思路)
 * [公共模块](#公共模块)
 * [修改适配需关注点](#修改适配需关注点)
@@ -34,7 +38,7 @@ QizNLP的特点如下：
 * 封装了少量常用模型。封装了多种常用的TF神经网络操作函数。
 * 封装了并提供了分布式训练方式（利用horovod）
 
-讲在前头：
+设计原则：
 
 框架设计并非追求面面俱到，因为每个人在实践过程中需求是不一样的（如特殊的输入数据处理、特殊的训练评估打印保存等过程）。故框架仅是尽量将可复用功能封装为公共模块，然后为四大范式（分类/序列标注/匹配/生成）提供一个简单的训练使用示例，供使用者根据自己的情况进行参考修改。框架原则上是重在灵活性，故不可避免地牺牲了部分易用性。虽然这可能给零基础的初学者带来一定困难，但框架的设计初衷也是希望能作为NLP不同实践场景中的一个编码起点（相当于初始弹药库），并且能在个人需求不断变化时也能灵活进行适配及持续使用。
   
@@ -53,7 +57,7 @@ pip install QizNLP
 ```shell script
 qiznlp_init
 ```
-回车后，会在当前工作目录生成相关文件：
+回车后，会在当前工作目录生成主要文件：
 ```bash
 .
 ├── model	# 各个任务的模型代码示例
@@ -73,16 +77,20 @@ qiznlp_init
 ├── deploy	# 模型载入及部署的代码示例
 │   ├── example.py
 │   └── web_API.py
-└── data	# 各个任务的默认数据
-    ├── train.toutiao.cls.txt
-    ├── valid.toutiao.cls.txt
-    ├── test.toutiao.cls.txt
-    ├── train.char.bmes.txt
-    ├── dev.char.bmes.txt
-    ├── test.char.bmes.txt
-    ├── mch_example_data.txt
-    ├── XHJ_5w.txt
-    └── Douban_Sess662.txt
+├── data	# 各个任务的默认数据
+│   ├── train.toutiao.cls.txt
+│   ├── valid.toutiao.cls.txt
+│   ├── test.toutiao.cls.txt
+│   ├── train.char.bmes.txt
+│   ├── dev.char.bmes.txt
+│   ├── test.char.bmes.txt
+│   ├── mch_example_data.txt
+│   ├── XHJ_5w.txt
+│   └── Douban_Sess662.txt
+└── common	# 存放预训练bert模型等
+    └── modules
+        └── bert
+            └── chinese_L-12_H-768_A-12
 ```
 注意：如果不是通过pip安装此项目而是直接从github上克隆项目源码，则进行后续操作前需将包显式加入python路径中：
 ```
@@ -151,6 +159,23 @@ rm_cls.train('cls_ckpt_1', '../data/cls_example_data.txt', preprocess_raw_data=p
 具体更多细节可自行查阅代码，相信你能很快理解并根据自己的需求进行修改以适配自有数据 :)
 
 这里有个彩蛋：第一次运行自有数据会不成功，需要对应修改```model_*.py```中conf与字典大小相关的参数，详情请参考下文：字典生成中的[提醒](#1生成词表字典)
+
+#### 3.加载预训练模型
+
+默认使用了谷歌官方中文bert-base预训练模型，[下载](https://storage.googleapis.com/bert_models/2018_11_03/chinese_L-12_H-768_A-12.zip) 并将对应模型文件放入当前工作目录的以下文件中：
+```bash
+common/modules/bert/chinese_L-12_H-768_A-12
+                        ├── bert_model.ckpt.data-00000-of-00001  # 自行下载
+                        ├── bert_model.ckpt.data-00000-of-00001  # 自行下载
+                        ├── bert_model.ckpt.meta  # 自行下载
+                        ├── bert_config.json  # 框架已提供
+                        └── vocab.txt  # 框架已提供
+```
+model中则是通过该路径构造bert模型，以cls_model.py中的bert类模型为例：
+```python
+bert_model_dir = f'{curr_dir}/../common/modules/bert/chinese_L-12_H-768_A-12'
+```
+
 ### 框架设计思路
 ——只有大体了解了框架设计才能更自由地进行适配 :)
 
@@ -193,7 +218,7 @@ model之间的主要区别是维护了自己特有的输入输出（即tf.placeh
 * 生成向量方式会被应用于run的数据处理（生成tfrecord或原生py的pkl数据），以及对原始数据进行推断时的预处理
 * 生成向量后对齐到placeholder的方式则会被应用在run的训练及推断。
 
-**使用bert类模型时输入改变了但不必新增model与run**  
+**为何使用bert类模型时输入改变了但不必新增model与run？**  
 bert类模型的输入有额外的\[CLS]\\\[SEP]等特殊符号，但本质上是模型层面的输入适配而不是任务数据层面的改变，故直接在原有model中重写与输入有关的函数，包装一层处理成bert输入的方法即可。
 
 ### 公共模块
@@ -315,7 +340,7 @@ horovodrun -np 2 -H localhost:2 python run_cls.py
 提醒：分布式训练中```train()```指定的```batch_size```参数即为有效（真实）batch size，内部会将batch切分为对应每个机或卡的小batch。故分布式训练实践中可在```train()```中直接指定大一点的```batch_size```。
 ### 类图
 附上主要的类设计图说明
-![Image text](main_class_diagram.png)
+![main_class_diagram](main_class_diagram.png)
 ## TODO
 * 完善对model和run模块的单独说明
 * 完善对公共module模块相关说明
