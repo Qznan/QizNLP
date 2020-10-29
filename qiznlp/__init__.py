@@ -9,13 +9,23 @@ def qiznlp_init():
     curr_dir = os.path.dirname(__file__)
 
     print('copying ...')
-    shutil.copytree(curr_dir + '/model', cwd + '/model')
-    print('copy model-dir finish')
-    shutil.copytree(curr_dir + '/run', cwd + '/run')
-    os.remove(cwd + '/run/run_base.py')
-    print('copy run-dir finish')
-    shutil.copytree(curr_dir + '/data', cwd + '/data')
-    print('copy data-dir finish')
-    # shutil.copytree(curr_dir + '/common', cwd + '/common')
-    # print('copy common-dir finish')
+
+    shutil.copytree(f'{curr_dir}/model', f'{cwd}/model')
+    print('copy model_dir finish')
+
+    shutil.copytree(f'{curr_dir}/run', f'{cwd}/run')
+    os.remove(f'{cwd}/run/run_base.py')
+    print('copy run_dir finish')
+
+    shutil.copytree(f'{curr_dir}/deploy', f'{cwd}/deploy')
+    print('copy deploy_dir finish')
+
+    shutil.copytree(f'{curr_dir}/data', f'{cwd}/data')
+    print('copy data_dir finish')
+
+    shutil.copytree(f'{curr_dir}/common/modules/bert/chinese_L-12_H-768_A-12',
+                    f'{cwd}/common/modules/bert/chinese_L-12_H-768_A-12')
+    print('copy bert_model_dir finish')
+
+
 

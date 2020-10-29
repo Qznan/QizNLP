@@ -334,7 +334,7 @@ if __name__ == '__main__':
     # rm_cls.train('cls_ckpt_1', '../data/cls_example_data.txt', preprocess_raw_data=preprocess_raw_data, batch_size=512)  # train
 
     # 训练toutiao新闻语料
-    rm_cls.train('cls_ckpt_toutiao1', '', preprocess_raw_data=preprocess_common_dataset_Toutiao, batch_size=32)  # train
+    rm_cls.train('cls_ckpt_toutiao1', '', preprocess_raw_data=preprocess_common_dataset_Toutiao, batch_size=128)  # train
 
     # exit(0)
     # demo头条新闻分类

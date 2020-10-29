@@ -134,7 +134,7 @@ class Model(object):
         self.train_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
 
     def build_model3(self):
-        from common.modules.bert_model import BERT, get_tokenizer
+        from qiznlp.common.modules.bert_model import BERT, get_tokenizer
         # adapt for bert
         bert_model_dir = f'{curr_dir}/../common/modules/bert/chinese_L-12_H-768_A-12'
         self.s1_input_mask = tf.placeholder(tf.int32, [None, None], name='s1_input_mask')
