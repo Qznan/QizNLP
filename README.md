@@ -9,15 +9,15 @@
 * [QizNLP简介](#QizNLP简介)
 * [安装流程](#安装流程)
 * [使用示例](#使用示例)
-   * [快速运行（使用默认数据训练）](#1.快速运行（使用默认数据训练）)
-   * [使用自有数据](#2.使用自有数据)
-   * [加载预训练模型](#3.加载预训练模型)
+   * [快速运行（使用默认数据训练）](#1快速运行（使用默认数据训练）)
+   * [使用自有数据](#2使用自有数据)
+   * [加载预训练模型](#3加载预训练模型)
 * [框架设计思路](#框架设计思路)
 * [公共模块](#公共模块)
 * [修改适配需关注点](#修改适配需关注点)
-   * [生成词表字典](#1、生成词表字典)
-   * [数据处理相关](#2、数据处理相关)
-   * [run和model的conf参数](#3、run和model的conf参数)
+   * [生成词表字典](#1生成词表字典)
+   * [数据处理相关](#2数据处理相关)
+   * [run和model的conf参数](#3run和model的conf参数)
    * [使用分布式](#4、使用分布式)
 * [类图](#类图)
 * [TODO](#todo)
@@ -156,7 +156,7 @@ python run_multi_s2s.py
 # 参数分别为：模型ckpt保存路径、自有数据文件路径、数据处理函数、训练batch size
 rm_cls.train('cls_ckpt_1', '../data/cls_example_data.txt', preprocess_raw_data=preprocess_raw_data, batch_size=512)
 
-# 注意：如果数据集不变的情况修改了模型想继续实验(这是调模型的大部分情况吧),在设置ckpt保存路径为'cls_ckpt_2'后，可设置参数
+# 注意：如果数据集不变的情况修改了模型想继续实验(这应该是调模型的大部分情况),在设置ckpt保存路径为'cls_ckpt_2'后，可设置参数
 # save_data_prefix='cls_ckpt_1'。表示使用前一次实验处理的已有数据，以节省时间。如下：
 # 修改了模型后的再次实验：
 rm_cls.train('cls_ckpt_2', '../data/cls_example_data.txt', preprocess_raw_data=preprocess_raw_data, batch_size=512, save_data_prefix='cls_ckpt_1')
@@ -255,7 +255,7 @@ token2id_dct['word2id'].to_count(cuted_sentent.split(' '))  # 迭代统计token�
 token2id_dct['word2id'].rebuild_by_counter(restrict=['<pad>', '<unk>'], min_freq=1, max_vocab_size=20000)
 token2id_dct['word2id'].save(f'{curr_dir}/../data/toutiaoword2id.dct')  # 保存到文件
 ```
-注意1）在某个任务切换跑自有数据与公共数据集时，记得切换token2id_dct的字典文件名，如下：
+**注意-1**: 在某个任务切换跑自有数据与公共数据集时，记得切换token2id_dct的字典文件名，如下：
 ```python
 self.token2id_dct = {
     # 'word2id': utils.Any2Id.from_file(f'{curr_dir}/../data/cls_word2id.dct', use_line_no=True),  # 自有数据
@@ -264,7 +264,7 @@ self.token2id_dct = {
     'label2id': utils.Any2Id.from_file(f'{curr_dir}/../data/toutiao_cls_label2id.dct', use_line_no=True),  # toutiao新闻
     }
 ```
-注意2）对自有数据进行训练时，由于模型的初始化比训练数据的处理更早，所以model源码中conf的相关参数（如：vocab size/label size等）只能先随意指定。之后等对训练数据的处理（分词、构造字典）完毕后才确认这些参数。  
+**注意-2**: 对自有数据进行训练时，由于模型的初始化比训练数据的处理更早，所以model源码中conf的相关参数（如：vocab size/label size等）只能先随意指定。之后等对训练数据的处理（分词、构造字典）完毕后才确认这些参数。  
 目前解决方式是运行两次run：第一次运行构造字典完毕后，会检查字典大小与model源码的vocab size等相关参数是否一致，不一致则自动更新model源码，请根据提示再次运行即可。如下：
 ```bash
 some param should be update:
@@ -316,7 +316,7 @@ conf = utils.dict2obj({
 ```
 具体参数可根据个人任务情况进行增删改。
 ##### 4、使用分布式
-框架提供的分布式功能基于horovod（一种同步数据并行策略），即将batch数据分为多个小batch，分配到多机或多卡来训练。
+框架提供的分布式功能基于horovod（使用一种同步数据并行策略），即将batch数据分为多个小batch，分配到多机或多卡来训练。
 
 前提：```pip install horovod```  
 限制：只能用TFRecord数据格式（因为需利用其提供的分片shard功能）。但生成TFRecord的过程不方便多个worker并行,故实践建议分两次运行，第一次采用非分布式正常运行生成数据、字典并能跑通训练，第二次运行才进行分布式训练  
@@ -342,7 +342,7 @@ horovodrun -np 2 -H localhost:2 python run_cls.py
 # -H localhost:2 代表使用本机的2块GPU
 # 注意此时需要在代码中事先设置好正确数量的可见GPU，如：os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
 ```
-提醒：分布式训练中```train()```指定的```batch_size```参数即为有效（真实）batch size，内部会将batch切分为对应每个机或卡的小batch。故分布式训练实践中可在```train()```中直接指定大一点的```batch_size```。
+提醒：分布式训练中```train()```指定的```batch_size```参数即为有效（真实）batch size，内部会将batch切分为对应每个机或卡的小batch。故分布式训练实践中可在```train()```中直接指定较大的```batch_size```。
 ### 类图
 附上主要的类设计图说明
 ![main_class_diagram](main_class_diagram.png)
@@ -363,10 +363,11 @@ horovodrun -np 2 -H localhost:2 python run_cls.py
 Mozilla Public License 2.0 (MPL 2.0)
 
 ## 后记
-框架形成历程  
-最早是在研究T2T官方transformer时，将transformer相关代码独立出来，作为弹药库。  
-后续增加了自己写的S2S的beam_search代码（支持一些多样性方法），以及TF模型的导出部署代码。开始有点框架的味道。  
-之后在解决各种任务类型时，不断重构，追求较灵活的设计方案，终得到现版本。
+框架形成历程：  
+最早是在研究T2T官方transformer时，将transformer相关代码抽取独立出来，方便其他任务。  
+之后增加了自己优化的S2S的beam_search代码（支持一些多样性方法），以及总结了TF模型的导出部署代码。  
+后续在解决各种任务类型时，考虑着代码复用，不断重构，追求设计方案的灵活，最终得到现版本。
   
-深知目前还有许多可改进的地方，欢迎和希望感兴趣的人能一起加入和改进！
+深知目前本项目仍有许多可改进的地方，欢迎issue和PR，也希望感兴趣的人能一起加入来改进！  
+如觉得本项目有用，感谢您的star~~
 
