@@ -49,7 +49,7 @@ def assign_value_to_tensor(tensor, idx, value):
     weight_zero_target_idx = 1. - weight_one_target_idx
 
     weight_one_target_idx = tf.cast(weight_one_target_idx, dtype=dtype)
-    weight_zero_target_idx = tf.catt(weight_zero_target_idx, dtype=dtype)
+    weight_zero_target_idx = tf.cast(weight_zero_target_idx, dtype=dtype)
     ret = tensor * weight_zero_target_idx + value * weight_one_target_idx
     return ret
 
@@ -64,7 +64,7 @@ def multinomial_without_repeat(logits, num_samples, top_k, uniform=False, eos_id
     batch_size = tf.shape(logits)[0]
     init_i = tf.constant(0)
     init_logits = logits
-    init_ret = tf.zeros([batch_size, 0], dytpe=tf.int32)
+    init_ret = tf.zeros([batch_size, 0], dtype=tf.int32)
 
     # 先把eos设置为不可能(-INF)
     init_logits = tf.map_fn(lambda x: assign_value_to_tensor(x, eos_id, value=-INF), init_logits)
@@ -85,7 +85,7 @@ def multinomial_without_repeat(logits, num_samples, top_k, uniform=False, eos_id
         ori_sample_idx = tf.gather_nd(init_topk_ids, ids_pos)  # [batch,1]
 
         ret = tf.concat([ret, ori_sample_idx], axis=-1)
-        sample_idx = tf.squeenze(sample_idx, axis=-1)  # [batch]
+        sample_idx = tf.squeeze(sample_idx, axis=-1)  # [batch]
         logits = tf.map_fn(lambda x: (assign_value_to_tensor(x[0], x[1], value=-INF), x[1]), (logits, sample_idx))  # tuple(logits,tmp)
         logits = logits[0]
         i += 1
@@ -159,15 +159,15 @@ def beam_search(symbols_to_logits_fn,
                 beam_size,
                 max_decode_len,
                 vocab_size,
-                alpha=0,
                 states=None,
                 eos_id=1,
-                stop_early=True,
+                gamma=0,  # diversity promote factor (refer_paper: A Simple, Fast Diverse Decoding Algorithm for Neural Generation)
                 num_group=1,
-                gamma=0,
-                stop_nums=None,
-                top_k=30):
+                top_k=None):  # effect when num_group>1. should satify top_k>=num_group. will sample num_group word in topk as first-word per group
     """ """
+    if top_k is not None:
+        assert top_k >= num_group
+
     group_size = num_group  # 换个名字
     beam_size = beam_size // group_size
     use_group = tf.not_equal(group_size, 1)  # 是否分组flag
@@ -237,7 +237,7 @@ def beam_search(symbols_to_logits_fn,
         flat_log_probs = tf.reshape(log_probs, [-1, group_size, beam_size * vocab_size])  # [batch,group,beam*vocab]
 
         def group_first_step_sample_from_logits():
-            """ 根据logits进行首字采样，必须分组才能使用本功能"""
+            """ 根据logits进行首字采样，必须分组才能使用本功能 """
             batch_logits = tf.reshape(flat_logits, [batch_size, group_size, beam_size, -1])  # [batch,group,beam,vocab]
             batch_logits = batch_logits[:, 0, 0, :]  # [batch,vocab]  # 由于首字每个beam里的所有logits一样
             sample_idx = multinomial_without_repeat(batch_logits, group_size, top_k=top_k, uniform=False)  # [batch,group]
@@ -264,7 +264,7 @@ def beam_search(symbols_to_logits_fn,
             """ 需每组的开头第一个字是相同的，组间不同
                 e.g.
                 batch=2 group=3 beam=2
-                ret
+                ret:
                 ids [[a,a],[b,b],[c,c]]
                 scores [[a,-inf],[b,-inf],[c,-inf]]
             """
@@ -286,9 +286,10 @@ def beam_search(symbols_to_logits_fn,
             _topk_log_probs, _topk_ids = tf.nn.top_k(flat_log_probs, k=beam_size)  # [batch,group,beam]
             return _topk_log_probs, _topk_ids
 
+        gropu_first_step_func = group_first_step_argmax_from_logprob if top_k is None else group_first_step_sample_from_logits
         # 如果不分组，就不执行first_step了
         use_group_first_step = tf.cond(use_group, lambda: 0, lambda: -1)
-        topk_log_probs, topk_ids = tf.cond(tf.equal(i, use_group_first_step), group_first_step_argmax_from_logprob, other_step)
+        topk_log_probs, topk_ids = tf.cond(tf.equal(i, use_group_first_step), gropu_first_step_func, other_step)
 
         next_log_probs = topk_log_probs  # [batch,group,beam]
 
@@ -357,7 +358,7 @@ def greedy_search(symbols_to_logits_fn,
                   max_decode_len,
                   cache=None,
                   eos_id=1,
-                  sampling_method='argmax',
+                  sampling_method='argmax',  # else use sampling_temp to sampling
                   sampling_temp=0.):
     """  """
     # initial_ids: [batch] tf.zeros([batch_size], dtype=tf.int32) 
@@ -397,11 +398,11 @@ def greedy_search(symbols_to_logits_fn,
             tf.TensorShape([None]),
         ])
 
-    decoded_ids = tf.expand_dims(decoded_ids, 1)[:, :, 1:]  # 去除齐师傅
+    decoded_ids = tf.expand_dims(decoded_ids, 1)[:, :, 1:]  # 去除起始符
     log_prob = tf.expand_dims(log_prob, 1)
     return decoded_ids, log_prob  # [batch,1,len], [batch,1]
 
-
+# example of func: symbols_to_logits_fn
 def symbols_to_logits_fn_readme():
     """ 
         输入：ids, i, cache

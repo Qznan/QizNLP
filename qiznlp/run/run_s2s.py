@@ -372,6 +372,8 @@ if __name__ == '__main__':
     # demo小黄鸡聊天机器人
     rm_s2s.restore('s2s_ckpt_XHJ1')  # for infer
     import readline
+
+    from qiznlp.common.modules.rerank import rerank
     while True:
         try:
             inp = input('enter:')
@@ -380,5 +382,14 @@ if __name__ == '__main__':
             batch_sent, batch_score = rm_s2s.predict([sent1], need_cut=False)
             print(*[f'{sent_}\t{score_}' for sent_, score_, in zip(batch_sent[0], batch_score[0])], sep='\n')
             print('elapsed:', time.time() - time0)
+
+            # use rerank module
+            time0 = time.time()
+            ori_results = [[sent_, score_] for sent_, score_, in zip(batch_sent[0], batch_score[0])]
+            rarank_results = rerank(ori_results, input_sent=inp)
+            print('after rerank >>>>>>>>>>>>>>:')
+            print(*[f'{sent_}\t{score_}' for sent_, score_, in rarank_results], sep='\n')
+            print('elapsed:', time.time() - time0)
+
         except KeyboardInterrupt:
             exit(0)

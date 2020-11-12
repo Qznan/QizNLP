@@ -22,11 +22,12 @@ conf = utils.dict2obj({
     'dropout_rate': 0.2,
     'lr': 1e-3,
     'pretrain_emb': None,
-    'beam_size': 30,
+    'beam_size': 40,
     'max_decode_len': 50,
     'eos_id': 2,
     'gamma': 1,  # 多样性鼓励因子
-    'num_group': 1,
+    'num_group': 1,  # 分组beam_search
+    'top_k': 30  # 详见beam_search
 })
 
 
@@ -165,7 +166,7 @@ class Model(object):
             decoded_ids, scores = greedy_search(
                 symbols_to_logits_fn,
                 initial_ids,
-                max_decode_len = conf.max_decode_len,
+                max_decode_len=conf.max_decode_len,
                 cache=cache,
                 eos_id=conf.eos_id,
             )
@@ -176,13 +177,14 @@ class Model(object):
             decoded_ids, scores = beam_search(  # [batch,beam,len] [batch,beam]
                 symbols_to_logits_fn,
                 initial_ids,
-                beam_size = conf.beam_size,
-                max_decode_len = conf.max_decode_len,
-                vocab_size = conf.vocab_size,
+                beam_size=conf.beam_size,
+                max_decode_len=conf.max_decode_len,
+                vocab_size=conf.vocab_size,
                 states=cache,
                 eos_id=conf.eos_id,
                 gamma=conf.gamma,
                 num_group=conf.num_group,
+                top_k=conf.top_k,
             )
             return decoded_ids, scores
 
@@ -291,7 +293,7 @@ class Model(object):
                                                                )
 
         initial_state = cell_decoder.zero_state(batch_size * conf.beam_size, tf.float32)  # 内部会检查batch_size与encoder_output是否一致,需乘beam_size
-        
+
         # 初始化缓存
         # 区分能否设在cache: cache的值在beam_search过程中会expand和merge,需要tensor rank大于1
         cache = {
@@ -347,7 +349,7 @@ class Model(object):
             decoded_ids, scores = greedy_search(
                 symbols_to_logits_fn,
                 initial_ids,
-                conf.max_decode_len,
+                max_decode_len=conf.max_decode_len,
                 cache=cache,
                 eos_id=conf.eos_id,
             )
@@ -361,9 +363,11 @@ class Model(object):
                 conf.beam_size,
                 conf.max_decode_len,
                 conf.vocab_size,
-                alpha=0,
                 states=cache,
                 eos_id=conf.eos_id,
+                gamma=conf.gamma,
+                num_group=conf.num_group,
+                top_k=conf.top_k,
             )
             return decoded_ids, scores
 
@@ -395,7 +399,7 @@ class Model(object):
             encoder_output, _ = self.bilstm_encoder1(encoder_input, s1_seqlen)  # [batch,len,2hid]
 
         batch_size = shape_list(encoder_input)[0]
-        
+
         # decoder
         decoder_rnn = getattr(tf.nn.rnn_cell, 'GRUCell')(conf.hidden_size)  # GRUCell/LSTMCell
         encdec_atten = EncDecAttention(encoder_output, s1_seqlen, conf.hidden_size)
@@ -467,7 +471,7 @@ class Model(object):
         # self.sent_loss = tf.reduce_sum(loss_num, -1) / tf.reduce_sum(loss_den, -1)  # [batch]
 
 
-        # decoder infer 
+        # decoder infer
         cache = {'state': decoder_rnn.zero_state(batch_size, tf.float32)}
         def symbols_to_logits_fn(ids, i, cache):
             # ids [batch,length]
@@ -495,7 +499,7 @@ class Model(object):
             decoded_ids, scores = greedy_search(
                 symbols_to_logits_fn,
                 initial_ids,
-                conf.max_decode_len,
+                max_decode_len=conf.max_decode_len,
                 cache=cache,
                 eos_id=conf.eos_id,
             )
@@ -506,12 +510,14 @@ class Model(object):
             decoded_ids, scores = beam_search(  # [batch,beam,len] [batch,beam]
                 symbols_to_logits_fn,
                 initial_ids,
-                conf.beam_size,
-                conf.max_decode_len,
-                conf.vocab_size,
-                alpha=0,
+                beam_size=conf.beam_size,
+                max_decode_len=conf.max_decode_len,
+                vocab_size=conf.vocab_size,
                 states=cache,
                 eos_id=conf.eos_id,
+                gamma=conf.gamma,
+                num_group=conf.num_group,
+                top_k=conf.top_k,
             )
             return decoded_ids, scores
 
@@ -539,13 +545,9 @@ class Model(object):
         # data:数据已经转为id, data不同字段保存该段字段全量数据
         batch_s1 = [data['s1'][i] for i in ids]
         batch_s2 = [data['s2'][i] for i in ids]
-        if len(set([len(e) for e in batch_s1])) != 1:  # 长度不等
-            batch_s1 = utils.pad_sequences(batch_s1, padding='post')
-        if len(set([len(e) for e in batch_s2])) != 1:  # 长度不等
-            batch_s2 = utils.pad_sequences(batch_s2, padding='post')
         feed_dict = {
-            self.s1: batch_s1,
-            self.s2: batch_s2,
+            self.s1: utils.pad_sequences(batch_s1, padding='post'),
+            self.s2: utils.pad_sequences(batch_s2, padding='post'),
         }
         if mode == 'train': feed_dict['num'] = len(batch_s1)
         feed_dict[self.dropout_rate] = conf.dropout_rate if mode == 'train' else 0.
