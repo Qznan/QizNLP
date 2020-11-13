@@ -1,15 +1,17 @@
 [![](https://img.shields.io/pypi/v/QizNLP?logo=pypi)](https://pypi.org/project/QizNLP/)
-![](https://img.shields.io/pypi/pyversions/QizNLP?logo=pypi) 
+![](https://img.shields.io/pypi/pyversions/QizNLP?logo=pypi)
 ![](https://img.shields.io/pypi/l/QizNLP?color=green&logo=pypi)
-
-**Demo** (cpu 训练比较慢)
+![](https://img.shields.io/badge/platform-windows%20%7C%20macos%20%7C%20linux-lightgrey)
+![](https://img.shields.io/badge/tensorflow-1.8%20%7C%201.9%20%7C%201.10%20%7C%201.11%20%7C%201.12%20%7C%201.13%20%7C%201.14-blue)  
+  
+**Demo**  (用cpu演示所以训练较慢) 
 ![run_demo](run_demo.gif)
 
 **目录**
 * [QizNLP简介](#QizNLP简介)
 * [安装流程](#安装流程)
 * [使用示例](#使用示例)
-   * [快速运行（使用默认数据训练）](#1快速运行（使用默认数据训练）)
+   * [快速运行（使用默认数据训练）](#1快速运行使用默认数据训练)
    * [使用自有数据](#2使用自有数据)
    * [加载预训练模型](#3加载预训练模型)
 * [框架设计思路](#框架设计思路)
@@ -18,7 +20,7 @@
    * [生成词表字典](#1生成词表字典)
    * [数据处理相关](#2数据处理相关)
    * [run和model的conf参数](#3run和model的conf参数)
-   * [使用分布式](#4、使用分布式)
+   * [使用分布式](#4使用分布式)
 * [类图](#类图)
 * [TODO](#todo)
 * [参考](#参考)
@@ -48,11 +50,14 @@ QizNLP的特点如下：
 python>=3.6
 1.8<=tensorflow<=1.14
 ```
-已发布pypi包，可直接通过```pip```下载
+已发布pypi包，可直接通过```pip```安装(推荐)
 ```shell script
 pip install QizNLP
 ```
-
+或通过本项目github安装
+```shell script
+pip install git+https://github.com/Qznan/QizNLP.git
+```
 安装完毕后，进入到你自己创建的工作目录，输入以下命令：
 ```shell script
 qiznlp_init
