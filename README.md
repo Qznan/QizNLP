@@ -1,13 +1,28 @@
 [![](https://img.shields.io/pypi/v/QizNLP?logo=pypi)](https://pypi.org/project/QizNLP/)
-![](https://img.shields.io/pypi/pyversions/QizNLP?logo=pypi)
-![](https://img.shields.io/pypi/l/QizNLP?color=green&logo=pypi)
+![](https://img.shields.io/pypi/dm/QizNLP.svg?label=pypi%20downloads&logo=PyPI)
+![](https://img.shields.io/pypi/l/QizNLP?color=green&logo=pypi)  
 ![](https://img.shields.io/badge/platform-windows%20%7C%20macos%20%7C%20linux-lightgrey)
+![](https://img.shields.io/pypi/pyversions/QizNLP?logo=pypi)
 ![](https://img.shields.io/badge/tensorflow-1.8%20%7C%201.9%20%7C%201.10%20%7C%201.11%20%7C%201.12%20%7C%201.13%20%7C%201.14-blue)  
-  
-**Demo**  (用cpu演示所以训练较慢) 
+
+如对您有帮助，欢迎star本项目~~感谢！  
+[文章系列](https://www.zhihu.com/column/c_1310303923157647360)  
+##### 一键运行分类 Demo  (用cpu演示所以训练较慢) 
 ![run_demo](run_demo.gif)
 
-**目录**
+##### 任务/模型支持概览
+
+|任务|支持模型<br>(*表示默认)|相关代码<br>(训练/模型)|默认数据|数据文件|来源| 
+|:------:|:---:|:---|---|:---|---|
+|分类|TransEncoder+MeanPooling<br>*TransEncoder+MHAttPooling<br>BERT|run_cls.py<br>model_cls.py|头条新闻分类|train/valid/test.toutiao.cls.txt|https://github.com/luopeixiang/textclf|
+|序列标注|*BiLSTM+CRF<br>IDCNN+CRF<br>BERT+CRF|run_s2l.py<br>model_s2l.py|ResumeNER简历数据|train/dev/test.char.bmes.txt|https://github.com/jiesutd/LatticeLSTM|
+|匹配|*ESIM|run_mch.py<br>model_mch.py|ChineseSTS相似语义文本|mch_example_data.txt|https://github.com/IAdmireu/ChineseSTS|
+|生成|LSTM_Seq2Seq+Attn<br>*Transformer|run_s2s.py<br>model_s2s.py|小黄鸡闲聊5万|XHJ_5w.txt|https://github.com/candlewill/Dialog_Corpus|
+|<img width=150/>|
+|多轮匹配|DAM<br>*MRFN|run_multi_mch.py<br>multi_mch_model.py|豆瓣多轮会话600+|Douban_Sess662.txt|https://github.com/MarkWuNLP/MultiTurnResponseSelection
+|多轮生成|HRED<br>HRAN<br>*ReCoSa|run_multi_s2s.py<br>multi_s2s_model.py|小黄鸡闲聊5万<br>豆瓣多轮会话600+|XHJ_5w.txt<br>+Douban_Sess662.txt|https://github.com/candlewill/Dialog_Corpus<br>https://github.com/MarkWuNLP/MultiTurnResponseSelection
+
+##### 目录
 * [QizNLP简介](#QizNLP简介)
 * [安装流程](#安装流程)
 * [使用示例](#使用示例)
@@ -129,16 +144,7 @@ python run_multi_s2s.py
 
 ```
 各任务默认数据及模型说明
-
-|任务|训练代码|模型代码|支持模型<br>*(默认)|默认数据|备注|来源| 
-|:------:|:---:|:---:|:---|---|:---|---|
-|分类|run_cls.py|model_cls.py|TransEncoder+MeanPooling<br>*TransEncoder+MHAttPooling<br>BERT|train、valid、test.toutiao.cls.txt|头条新闻分类|https://github.com/luopeixiang/textclf|
-|序列标注|run_s2l.py|model_s2l.py|*BiLSTM+CRF<br>IDCNN+CRF<br>BERT+CRF|train、dev、test.char.bmes.txt|ResumeNER简历数据|https://github.com/jiesutd/LatticeLSTM|
-|匹配|run_mch.py|model_mch.py|*ESIM|mch_example_data.txt|ChineseSTS相似文本语义|https://github.com/IAdmireu/ChineseSTS|
-|生成|run_s2s.py|model_s2s.py|LSTM_Seq2Seq+Attn<br>*Transformer|XHJ_5w.txt|小黄鸡闲聊5万|https://github.com/candlewill/Dialog_Corpus|
-|<img width=150/>|
-|多轮匹配|run_multi_mch.py|multi_mch_model.py|DAM<br>*MRFN|Douban_Sess662.txt|豆瓣多轮会话600+|https://github.com/MarkWuNLP/MultiTurnResponseSelection
-|多轮生成|run_multi_s2s.py|multi_s2s_model.py|HRED<br>HRAN<br>*ReCoSa|XHJ_5w.txt<br>+Douban_Sess662.txt|小黄鸡闲聊5万<br>豆瓣多轮会话600+|https://github.com/candlewill/Dialog_Corpus<br>https://github.com/MarkWuNLP/MultiTurnResponseSelection
+[见上](#任务模型支持概览)
 
 #### 2.使用自有数据
 根据输入数据文本格式修改```run_*.py```中的```preprocess_raw_data()```函数，决定如何读取自有数据。
